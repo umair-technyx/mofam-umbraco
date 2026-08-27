@@ -15,6 +15,8 @@ public sealed class ServiceComposer : IComposer
     {
         builder.Services.AddScoped<IPageService, PageService>();
         builder.Services.AddScoped<IComponentMapper, ComponentMapper>();
+        builder.Services.AddScoped<ISiteRootResolver, SiteRootResolver>();
+        builder.Services.AddScoped<IMediaUrlBuilder, MediaUrlBuilder>();
         builder.Services.AddScoped<ApiKeyAuthFilter>();
         builder.Services.AddScoped<IDatabaseConnectivityService, DatabaseConnectivityService>();
 

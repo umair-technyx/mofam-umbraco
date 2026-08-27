@@ -6,20 +6,19 @@ using Mofam.Domain.Models.Common;
 using Mofam.Domain.Models.Dtos;
 using Mofam.Infrastructure.Filters;
 
-namespace Mofam.CMS.Controllers.App;
+namespace Mofam.CMS.Controllers;
 
 [ApiController]
-[Route("api/v1/app/pages")]
+[Route("api/v1/web/pages")]
 [ServiceFilter(typeof(ApiKeyAuthFilter))]
 [EnableRateLimiting("api")]
-public sealed class AppPagesController(IPageService pageService) : ControllerBase
+public sealed class PageController(IPageService pageService) : ControllerBase
 {
     [HttpGet("{culture}/{slug}")]
     public ActionResult<ApiResponse<PageDto>> GetBySlug(string culture, string slug)
     {
         var page = pageService.GetPageBySlug(
-            CmsConstants.RootAlias.App,
-            CmsConstants.ContentTypes.AppPage,
+            CmsConstants.ContentTypes.WebPage,
             slug,
             culture);
 

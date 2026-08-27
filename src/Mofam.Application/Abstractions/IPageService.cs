@@ -4,5 +4,5 @@ namespace Mofam.Application.Abstractions;
 
 public interface IPageService
 {
-    PageDto? GetPageBySlug(string rootAlias, string pageContentTypeAlias, string slug, string? culture);
+    PageDto? GetPageBySlug(string contentTypeAlias, string slug, string? culture);
 }

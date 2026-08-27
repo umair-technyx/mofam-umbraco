@@ -21,6 +21,17 @@ public static class CmsConstants
     {
         public const string WebPage = "webPage";
         public const string AppPage = "appPage";
+
+        /// <summary>
+        /// The channel root a given page type lives under, so callers don't have to pass
+        /// the root alias alongside the page type.
+        /// </summary>
+        public static string RootFor(string pageContentTypeAlias) => pageContentTypeAlias switch
+        {
+            WebPage => RootAlias.Web,
+            AppPage => RootAlias.App,
+            _ => RootAlias.Root,
+        };
     }
 
     public static class Cultures

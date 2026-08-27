@@ -1,39 +1,38 @@
-using Serilog;
-using Umbraco.Cms.Core;
-using Umbraco.Cms.Core.Models.PublishedContent;
 using Mofam.Application.Abstractions;
 using Mofam.Application.Helpers;
 using Mofam.Domain.Constants;
 using Mofam.Domain.Models.Dtos;
+using Serilog;
+using Umbraco.Extensions;
 
 namespace Mofam.Application.Services;
 
 public sealed class PageService(
-    IPublishedContentQuery contentQuery,
+    ISiteRootResolver siteRootResolver,
     IComponentMapper componentMapper,
     ILogger logger) : IPageService
 {
-    public PageDto? GetPageBySlug(string rootAlias, string pageContentTypeAlias, string slug, string? culture)
+    public PageDto? GetPageBySlug(string pageContentTypeAlias, string slug, string? culture)
     {
         using var tracer = new FunctionTracer(loginfile: true);
 
         try
         {
             var cultureKey = culture ?? string.Empty;
+            var rootAlias = CmsConstants.ContentTypes.RootFor(pageContentTypeAlias);
 
-            var channelRoot = contentQuery
-                .ContentAtRoot()
-                .SelectMany(r => r.Children)
-                .FirstOrDefault(c => c.ContentType.Alias == rootAlias);
-
+            var channelRoot = siteRootResolver.GetRoot(rootAlias);
             if (channelRoot is null) return null;
 
+            // NOTE: obsolete Children property — see SiteRootResolver for the Umbraco 18 migration note.
+#pragma warning disable CS0618
             var page = channelRoot.Children
                 .FirstOrDefault(c =>
                     c.ContentType.Alias == pageContentTypeAlias &&
                     c.Cultures.TryGetValue(cultureKey, out var info) &&
                     info.UrlSegment == slug &&
                     c.IsPublished(culture));
+#pragma warning restore CS0618
 
             if (page is null) return null;
 
@@ -53,8 +52,8 @@ public sealed class PageService(
         {
             logger.Error(
                 ex,
-                "GetPageBySlug failed. RootAlias={RootAlias}, PageContentTypeAlias={PageContentTypeAlias}, Slug={Slug}, Culture={Culture}",
-                rootAlias, pageContentTypeAlias, slug, culture);
+                "GetPageBySlug failed. PageContentTypeAlias={PageContentTypeAlias}, Slug={Slug}, Culture={Culture}",
+                pageContentTypeAlias, slug, culture);
             throw;
         }
     }

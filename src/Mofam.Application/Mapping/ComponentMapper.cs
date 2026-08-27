@@ -1,15 +1,18 @@
+using Mofam.Application.Abstractions;
+using Mofam.Application.Helpers;
+using Mofam.Domain.Models.Dtos;
 using Serilog;
 using Umbraco.Cms.Core.Models;
 using Umbraco.Cms.Core.Models.Blocks;
 using Umbraco.Cms.Core.Models.PublishedContent;
 using Umbraco.Cms.Core.Web;
-using Mofam.Application.Abstractions;
-using Mofam.Application.Helpers;
-using Mofam.Domain.Models.Dtos;
 
 namespace Mofam.Application.Mapping;
 
-public sealed class ComponentMapper(IVariationContextAccessor variationContextAccessor, ILogger logger) : IComponentMapper
+public sealed class ComponentMapper(
+    IVariationContextAccessor variationContextAccessor,
+    IMediaUrlBuilder mediaUrlBuilder,
+    ILogger logger) : IComponentMapper
 {
     public IReadOnlyList<ComponentDto> MapComponents(IPublishedProperty? componentsProperty, string? culture)
     {
@@ -25,12 +28,12 @@ public sealed class ComponentMapper(IVariationContextAccessor variationContextAc
             }
 
             var value = componentsProperty.GetValue(culture) ?? componentsProperty.GetValue(null);
-            var visitedKeys = new HashSet<Guid>();
+            var ancestors = new HashSet<Guid>();
 
             return value switch
             {
-                IEnumerable<IPublishedContent> multiPick => multiPick.Select(c => MapPublishedContent(c, culture, visitedKeys, logger)).ToList(),
-                IPublishedContent singlePick => [MapPublishedContent(singlePick, culture, visitedKeys, logger)],
+                IEnumerable<IPublishedContent> multiPick => multiPick.Select(c => MapPublishedContent(c, culture, ancestors)).ToList(),
+                IPublishedContent singlePick => [MapPublishedContent(singlePick, culture, ancestors)],
                 _ => [],
             };
         }
@@ -41,21 +44,33 @@ public sealed class ComponentMapper(IVariationContextAccessor variationContextAc
         }
     }
 
-    private static ComponentDto MapPublishedContent(IPublishedElement content, string? culture, HashSet<Guid> visitedKeys, ILogger logger)
+    private ComponentDto MapPublishedContent(IPublishedElement content, string? culture, HashSet<Guid> ancestors)
     {
-        if (!visitedKeys.Add(content.Key))
+        // Guard against genuine cycles only — a fresh set per branch, so the same item
+        // legitimately appearing under two siblings is still mapped in full.
+        if (ancestors.Contains(content.Key))
         {
-            return new ComponentDto { Alias = content.ContentType.Alias, Properties = new Dictionary<string, object?>() };
+            logger.Warning(
+                "Cycle detected at {ContentType} ({Key}) — stopping recursion on this branch",
+                content.ContentType.Alias, content.Key);
+
+            return new ComponentDto
+            {
+                Alias = content.ContentType.Alias,
+                Properties = new Dictionary<string, object?>(),
+            };
         }
+
+        var branch = new HashSet<Guid>(ancestors) { content.Key };
 
         return new ComponentDto
         {
             Alias = content.ContentType.Alias,
-            Properties = MapProperties(content, culture, visitedKeys, logger),
+            Properties = MapProperties(content, culture, branch),
         };
     }
 
-    private static Dictionary<string, object?> MapProperties(IPublishedElement content, string? culture, HashSet<Guid> visitedKeys, ILogger logger)
+    private Dictionary<string, object?> MapProperties(IPublishedElement content, string? culture, HashSet<Guid> ancestors)
     {
         var result = new Dictionary<string, object?>();
         foreach (var property in content.Properties)
@@ -63,7 +78,7 @@ public sealed class ComponentMapper(IVariationContextAccessor variationContextAc
             try
             {
                 var value = property.GetValue(culture) ?? property.GetValue(null);
-                result[property.Alias] = SanitizeValue(value, culture, visitedKeys, logger);
+                result[property.Alias] = SanitizeValue(value, culture, ancestors);
             }
             catch (Exception ex)
             {
@@ -77,14 +92,41 @@ public sealed class ComponentMapper(IVariationContextAccessor variationContextAc
         return result;
     }
 
-    private static object? SanitizeValue(object? value, string? culture, HashSet<Guid> visitedKeys, ILogger logger) => value switch
+    private object? SanitizeValue(object? value, string? culture, HashSet<Guid> ancestors)
     {
-        null => null,
-        string or bool or int or long or double or decimal or Guid or DateTime or DateTimeOffset => value,
-        BlockGridModel blockGrid => blockGrid.Select(i => MapPublishedContent(i.Content, culture, visitedKeys, logger)).ToList(),
-        BlockListModel blockList => blockList.Select(i => MapPublishedContent(i.Content, culture, visitedKeys, logger)).ToList(),
-        IEnumerable<IPublishedContent> list => list.Select(c => MapPublishedContent(c, culture, visitedKeys, logger)).ToList(),
-        IPublishedContent content => MapPublishedContent(content, culture, visitedKeys, logger),
-        _ => value.ToString(),
-    };
+        switch (value)
+        {
+            case null:
+                return null;
+
+            case string or bool or int or long or double or decimal or Guid or DateTime or DateTimeOffset:
+                return value;
+
+            // Media must be resolved to a URL before the content-node branches below,
+            // otherwise it serialises as a property bag with no usable link.
+            case IPublishedContent media when media.ItemType == PublishedItemType.Media:
+                return mediaUrlBuilder.Build(media, culture);
+
+            case IEnumerable<IPublishedContent> mediaList when mediaUrlBuilder.IsMedia(mediaList):
+                return mediaUrlBuilder.BuildMany(mediaList, culture);
+
+            case BlockGridModel blockGrid:
+                return blockGrid.Select(i => MapPublishedContent(i.Content, culture, ancestors)).ToList();
+
+            case BlockListModel blockList:
+                return blockList.Select(i => MapPublishedContent(i.Content, culture, ancestors)).ToList();
+
+            case IEnumerable<IPublishedContent> list:
+                return list.Select(c => MapPublishedContent(c, culture, ancestors)).ToList();
+
+            case IPublishedContent content:
+                return MapPublishedContent(content, culture, ancestors);
+
+            case IEnumerable<string> strings:
+                return strings.ToList();
+
+            default:
+                return value.ToString();
+        }
+    }
 }
