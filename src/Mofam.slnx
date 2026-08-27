@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="Mofam.Application/Mofam.Application.csproj" Id="124f29f7-97df-4c48-babf-380b9d759928" />
+  <Project Path="Mofam.CMS/Mofam.CMS.csproj" />
+  <Project Path="Mofam.Domain/Mofam.Domain.csproj" Id="09165ccb-3ee8-4605-90cc-2472c5b1ff71" />
+  <Project Path="Mofam.Infrastructure/Mofam.Infrastructure.csproj" Id="e52f4ec5-3e19-4f11-90d3-6267dc2bf3f7" />
+</Solution>

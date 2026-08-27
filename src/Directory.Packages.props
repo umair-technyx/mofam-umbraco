@@ -1,0 +1,26 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <UmbracoAppLocalIcuVersion Condition="'$(UmbracoAppLocalIcuVersion)' == ''">72.1.0.3</UmbracoAppLocalIcuVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Pinned exact version — reproducible builds. Code sirf stable/documented Umbraco 17
+         APIs use karta hai (IPublishedContentQuery, IPublishedContent etc.), isliye 17.0.0
+         se 17.6.x tak kisi bhi 17.x patch/minor pe recompile ho sakta hai; version bump ke
+         liay bas yahan number update karna hoga. -->
+    <PackageVersion Include="Umbraco.Cms" Version="17.6.2" />
+    <PackageVersion Include="Umbraco.Cms.Core" Version="17.6.2" />
+    <PackageVersion Include="Umbraco.Cms.Infrastructure" Version="17.6.2" />
+    <PackageVersion Include="Umbraco.Cms.DevelopmentMode.Backoffice" Version="17.6.2" />
+    <PackageVersion Include="Microsoft.ICU.ICU4C.Runtime" Version="$(UmbracoAppLocalIcuVersion)" />
+
+    <!-- Logging -->
+    <PackageVersion Include="Serilog.AspNetCore" Version="9.0.0" />
+    <PackageVersion Include="Serilog.Enrichers.Environment" Version="3.0.1" />
+    <PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1" />
+    <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />
+    <!-- "Serilog.Sinks.Sentry" (community package) deprecated hai aur alag API deta hai —
+         Sentry ki official Serilog integration "Sentry.Serilog" hai. -->
+    <PackageVersion Include="Sentry.Serilog" Version="6.9.0" />
+  </ItemGroup>
+</Project>

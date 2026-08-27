@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Mofam.Domain\Mofam.Domain.csproj" />
+  </ItemGroup>
+
+  <!-- IPublishedContentQuery jaisi cheezein Umbraco.Cms.Core package (Umbraco.Core.dll)
+       mein NAHI hain — unka implementation/kuch interfaces Umbraco.Infrastructure.dll
+       mein hain, jo Umbraco.Cms.Infrastructure package se aata hai. -->
+  <ItemGroup>
+    <PackageReference Include="Umbraco.Cms.Core" />
+    <PackageReference Include="Umbraco.Cms.Infrastructure" />
+  </ItemGroup>
+
+</Project>
