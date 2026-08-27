@@ -9,7 +9,7 @@ using Mofam.Infrastructure.Filters;
 namespace Mofam.CMS.Controllers;
 
 [ApiController]
-[Route("api/v1/web/pages")]
+[Route("api/web/pages")]
 [ServiceFilter(typeof(ApiKeyAuthFilter))]
 [EnableRateLimiting("api")]
 public sealed class PageController(IPageService pageService) : ControllerBase
@@ -18,7 +18,7 @@ public sealed class PageController(IPageService pageService) : ControllerBase
     public ActionResult<ApiResponse<PageDto>> GetBySlug(string culture, string slug)
     {
         var page = pageService.GetPageBySlug(
-            CmsConstants.ContentTypes.WebPage,
+            CmsConstants.ContentTypes.Page,
             slug,
             culture);
 

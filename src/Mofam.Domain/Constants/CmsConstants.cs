@@ -4,13 +4,8 @@ public static class CmsConstants
 {
     public static class RootAlias
     {
-        public const string Root = "root";
-        public const string Web = "web";
-        public const string App = "app";
+        public const string Site = "site";
         public const string Components = "components";
-        public const string WebComponents = "webComponents";
-        public const string AppComponents = "appComponents";
-        public const string SharedComponents = "sharedComponents";
         public const string DataSources = "dataSources";
         public const string Settings = "settings";
         public const string EmailTemplates = "emailTemplates";
@@ -19,8 +14,10 @@ public static class CmsConstants
 
     public static class ContentTypes
     {
-        public const string WebPage = "webPage";
-        public const string AppPage = "appPage";
+        public const string Page = "page";
+        public const string Service = "service";
+        public const string ServiceCategory = "serviceCategory";
+
 
         /// <summary>
         /// The channel root a given page type lives under, so callers don't have to pass
@@ -28,9 +25,8 @@ public static class CmsConstants
         /// </summary>
         public static string RootFor(string pageContentTypeAlias) => pageContentTypeAlias switch
         {
-            WebPage => RootAlias.Web,
-            AppPage => RootAlias.App,
-            _ => RootAlias.Root,
+            Page => RootAlias.Site,
+            _ => RootAlias.Site,
         };
     }
 
