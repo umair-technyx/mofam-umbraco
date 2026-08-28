@@ -47,6 +47,44 @@ public static class CmsConstants
         public const string Slug = "slug";
     }
 
+    /// <summary>
+    /// Properties from the metaTags composition. Any content type composed with it
+    /// exposes these, so the SEO block is built the same way for every page type.
+    /// </summary>
+    public static class SeoFields
+    {
+        public const string MetaTitle = "metaTitle";
+        public const string MetaDescription = "metaDescription";
+        public const string MetaKeywords = "metaKeywords";
+        public const string MetaCanonicalLink = "metaCanonicalLink";
+        public const string MetaSchemaJson = "metaSchemaJson";
+
+        public const string RobotsIndex = "robotsMetaTagsindex";
+        public const string RobotsFollow = "robotsMetaTagsFollow";
+
+        public const string OgTitle = "ogTitle";
+        public const string OgDescription = "ogDescription";
+        public const string OgType = "ogType";
+        public const string OgPageUrl = "ogPagUrl";
+        public const string OgImage = "ogImage";
+        public const string OpenGraphImage = "openGraphImage";
+        public const string OpenGraphImageExternal = "openGraphImageExternal";
+
+        public const string TwitterTitle = "ogTwitterTitle";
+        public const string TwitterDescription = "ogTwitterDescription";
+        public const string TwitterUrl = "ogTwitterUrl";
+        public const string TwitterImage = "ogTwitterImage";
+
+        public const string HreflangDefault = "defaultHreflangURL";
+        public const string HreflangEnglish = "englishHreflangURL";
+        public const string HreflangArabic = "arabicHreflangURL";
+
+        public const string HideFromSitemap = "hideFromSitemap";
+        public const string CustomPriority = "customPriority";
+        public const string CustomChangeFrequency = "customchangeFrequency";
+        public const string LastUpdatedDate = "lastUpdatedDate";
+    }
+
     /// <summary>Properties on the site root, grouped by the tab they sit under.</summary>
     public static class SiteFields
     {
