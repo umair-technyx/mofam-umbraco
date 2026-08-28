@@ -13,10 +13,11 @@ namespace Mofam.CMS.Controllers;
 [Route("api/web")]
 [ServiceFilter(typeof(ApiKeyAuthFilter))]
 [EnableRateLimiting("api")]
+// Search is currently disabled — IContentSearchService is not registered in
+// ServiceComposer for now
 public sealed class WebApiController(
     IApiService apiService,
-    IStartupService startupService,
-    IContentSearchService searchService) : ControllerBase
+    IStartupService startupService) : ControllerBase
 {
     [HttpGet("pages/{culture}/{slug}")]
     public ActionResult<ApiResponse<PageDto>> GetBySlug(string culture, string slug)
