@@ -1,0 +1,13 @@
+using Mofam.Domain.Models.Dtos;
+using Mofam.Domain.Models.Requests;
+
+namespace Mofam.Application.Abstractions;
+
+/// <summary>
+/// Examine-backed content search. Filtering, paging and sorting are pushed into the
+/// index rather than done in memory, so cost does not grow with the size of the site.
+/// </summary>
+public interface IContentSearchService
+{
+    SearchResultsDto Search(SearchRequest request);
+}
