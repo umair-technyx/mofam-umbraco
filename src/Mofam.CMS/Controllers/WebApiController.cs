@@ -5,7 +5,6 @@ using Mofam.Application.IServices;
 using Mofam.Domain.Constants;
 using Mofam.Domain.Models.Common;
 using Mofam.Domain.Models.Dtos;
-using Mofam.Domain.Models.Requests;
 using Mofam.Infrastructure.Filters;
 
 namespace Mofam.CMS.Controllers;
@@ -44,15 +43,15 @@ public sealed class WebApiController(
     }
 
     /// <summary>Examine-backed content search. Paging and sorting happen in the index.</summary>
-    [HttpPost("search")]
-    public ActionResult<ApiResponse<SearchResultsDto>> Search([FromBody] SearchRequest request)
-    {
-        if (request is null)
-        {
-            return BadRequest(ApiResponse<SearchResultsDto>.BadRequest("A search request body is required."));
-        }
+    //[HttpPost("search")]
+    //public ActionResult<ApiResponse<SearchResultsDto>> Search([FromBody] SearchRequest request)
+    //{
+    //    if (request is null)
+    //    {
+    //        return BadRequest(ApiResponse<SearchResultsDto>.BadRequest("A search request body is required."));
+    //    }
 
-        var results = searchService.Search(request);
-        return Ok(ApiResponse<SearchResultsDto>.Ok(results, "Search completed successfully."));
-    }
+    //    var results = searchService.Search(request);
+    //    return Ok(ApiResponse<SearchResultsDto>.Ok(results, "Search completed successfully."));
+    //}
 }
