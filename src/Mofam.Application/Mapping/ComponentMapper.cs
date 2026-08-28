@@ -11,7 +11,7 @@ namespace Mofam.Application.Mapping;
 
 public sealed class ComponentMapper(
     IVariationContextAccessor variationContextAccessor,
-    IMediaUrlBuilder mediaUrlBuilder,
+    IPropertyValueMapper valueMapper,
     ILogger logger) : IComponentMapper
 {
     public IReadOnlyList<ComponentDto> MapComponents(IPublishedProperty? componentsProperty, string? culture)
@@ -94,39 +94,20 @@ public sealed class ComponentMapper(
 
     private object? SanitizeValue(object? value, string? culture, HashSet<Guid> ancestors)
     {
-        switch (value)
+        // Primitives, links, media and string lists are shared with every other endpoint.
+        if (valueMapper.TryMapLeaf(value, culture, out var leaf))
         {
-            case null:
-                return null;
-
-            case string or bool or int or long or double or decimal or Guid or DateTime or DateTimeOffset:
-                return value;
-
-            // Media must be resolved to a URL before the content-node branches below,
-            // otherwise it serialises as a property bag with no usable link.
-            case IPublishedContent media when media.ItemType == PublishedItemType.Media:
-                return mediaUrlBuilder.Build(media, culture);
-
-            case IEnumerable<IPublishedContent> mediaList when mediaUrlBuilder.IsMedia(mediaList):
-                return mediaUrlBuilder.BuildMany(mediaList, culture);
-
-            case BlockGridModel blockGrid:
-                return blockGrid.Select(i => MapPublishedContent(i.Content, culture, ancestors)).ToList();
-
-            case BlockListModel blockList:
-                return blockList.Select(i => MapPublishedContent(i.Content, culture, ancestors)).ToList();
-
-            case IEnumerable<IPublishedContent> list:
-                return list.Select(c => MapPublishedContent(c, culture, ancestors)).ToList();
-
-            case IPublishedContent content:
-                return MapPublishedContent(content, culture, ancestors);
-
-            case IEnumerable<string> strings:
-                return strings.ToList();
-
-            default:
-                return value.ToString();
+            return leaf;
         }
+
+        // What's left needs recursion into ComponentDto, which is this mapper's own shape.
+        return value switch
+        {
+            BlockGridModel blockGrid => blockGrid.Select(i => MapPublishedContent(i.Content, culture, ancestors)).ToList(),
+            BlockListModel blockList => blockList.Select(i => MapPublishedContent(i.Content, culture, ancestors)).ToList(),
+            IEnumerable<IPublishedContent> list => list.Select(c => MapPublishedContent(c, culture, ancestors)).ToList(),
+            IPublishedContent content => MapPublishedContent(content, culture, ancestors),
+            _ => value?.ToString(),
+        };
     }
 }
