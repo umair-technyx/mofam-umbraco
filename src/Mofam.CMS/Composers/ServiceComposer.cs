@@ -18,6 +18,7 @@ public sealed class ServiceComposer : IComposer
         builder.Services.AddScoped<IStartupService, StartupService>();
         builder.Services.AddScoped<IComponentMapper, ComponentMapper>();
         builder.Services.AddScoped<IPropertyValueMapper, PropertyValueMapper>();
+        builder.Services.AddScoped<ISeoMapper, SeoMapper>();
         builder.Services.AddScoped<ISiteRootResolver, SiteRootResolver>();
         builder.Services.AddScoped<IMediaUrlBuilder, MediaUrlBuilder>();
         //builder.Services.AddScoped<IContentSearchService, ContentSearchService>();

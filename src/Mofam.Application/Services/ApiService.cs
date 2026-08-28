@@ -13,6 +13,7 @@ public sealed class ApiServcie(
     ISiteRootResolver siteRootResolver,
     IComponentMapper componentMapper,
     IPropertyValueMapper valueMapper,
+    ISeoMapper seoMapper,
     ILogger logger) : IApiService
 {
     public PageDto? GetPageBySlug(string pageContentTypeAlias, string slug, string? culture)
@@ -63,6 +64,7 @@ public sealed class ApiServcie(
                 Id = page.Key.ToString(),
                 Slug = SlugOf(page, culture) ?? wanted,
                 Title = pageCultureInfo?.Name ?? page.Name ?? string.Empty,
+                Seo = seoMapper.Map(page, culture),
                 Components = componentMapper.MapComponents(componentsProperty, culture),
             };
         }
