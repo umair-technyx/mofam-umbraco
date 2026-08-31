@@ -45,6 +45,9 @@ public static class CmsConstants
         /// generated <c>UrlSegment</c> — page lookups match on this value.
         /// </summary>
         public const string Slug = "slug";
+
+        public const string Title = "title";
+        public const string Categories = "categories";
     }
 
     /// <summary>

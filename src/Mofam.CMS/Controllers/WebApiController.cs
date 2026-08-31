@@ -7,7 +7,6 @@ using Mofam.Domain.Models.Common;
 using Mofam.Domain.Models.Dtos;
 using Mofam.Domain.Models.Requests;
 using Mofam.Infrastructure.Filters;
-using Umbraco.Cms.Core.Services;
 
 namespace Mofam.CMS.Controllers;
 
@@ -15,12 +14,11 @@ namespace Mofam.CMS.Controllers;
 [Route("api/web")]
 [ServiceFilter(typeof(ApiKeyAuthFilter))]
 [EnableRateLimiting("api")]
-// Search is currently disabled — IContentSearchService is not registered in
-// ServiceComposer for now
 public sealed class WebApiController(
     IApiService apiService,
     IStartupService startupService,
-    Application.Abstractions.IContentSearchService searchService) : ControllerBase
+    IFilterService filterService,
+    ISiteSearchService searchService) : ControllerBase
 {
     [HttpGet("pages/{culture}/{slug}")]
     public ActionResult<ApiResponse<PageDto>> GetBySlug(string culture, string slug)
@@ -44,6 +42,25 @@ public sealed class WebApiController(
         return startup is null
             ? NotFound(ApiResponse<Startup>.NotFound("Site root not found."))
             : Ok(ApiResponse<Startup>.Ok(startup, "Startup fetched successfully."));
+    }
+
+    /// <summary>
+    /// Available filter options for a listing type, e.g. the categories actually used by
+    /// published services. Options with no matching content are never returned.
+    /// </summary>
+    [HttpGet("{culture}/filters")]
+    public ActionResult<ApiResponse<FilterDataDto>> GetFilterData(string culture, [FromQuery] string contentType)
+    {
+        if (string.IsNullOrWhiteSpace(contentType))
+        {
+            return BadRequest(ApiResponse<FilterDataDto>.BadRequest("A contentType is required."));
+        }
+
+        var data = filterService.GetFilterData(contentType, culture);
+
+        return data is null
+            ? NotFound(ApiResponse<FilterDataDto>.NotFound("No filter data found."))
+            : Ok(ApiResponse<FilterDataDto>.Ok(data, "Filter data fetched successfully."));
     }
 
     /// <summary>Examine-backed content search. Paging and sorting happen in the index.</summary>

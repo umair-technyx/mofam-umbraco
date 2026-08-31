@@ -1,10 +1,9 @@
 using Examine;
 using Examine.Search;
-using Microsoft.Extensions.Options;
 using Mofam.Application.Abstractions;
 using Mofam.Domain.Models.Dtos;
 using Mofam.Domain.Models.Requests;
-using Mofam.Domain.Options;
+using Mofam.Domain.Constants;
 using Serilog;
 using Umbraco.Cms.Core;
 using Umbraco.Cms.Core.Models.PublishedContent;
@@ -12,30 +11,27 @@ using Umbraco.Cms.Infrastructure.Examine;
 
 namespace Mofam.Application.Services;
 
-public sealed class ContentSearchService(
+public sealed class SiteSearchService(
     IExamineManager examineManager,
     IPublishedContentQuery contentQuery,
     IMediaUrlBuilder mediaUrlBuilder,
-    IOptions<SearchOptions> searchOptions,
-    ILogger logger) : IContentSearchService
+    ILogger logger) : ISiteSearchService
 {
     private const string NodeTypeAliasField = "__NodeTypeAlias";
     private const string PublishedField = "__Published";
 
     public SearchResultsDto Search(SearchRequest request)
     {
-        var options = searchOptions.Value;
-
         var pageNumber = Math.Max(1, request.PageNumber);
-        var pageSize = Math.Clamp(request.PageSize, 1, Math.Max(1, options.MaxPageSize));
+        var pageSize = Math.Clamp(request.PageSize, 1, Math.Max(1, SearchConstants.MaxPageSize));
 
-        if (!examineManager.TryGetIndex(options.IndexName, out var index))
+        if (!examineManager.TryGetIndex(SearchConstants.IndexName, out var index))
         {
-            logger.Warning("Examine index {IndexName} is not available — returning no results", options.IndexName);
+            logger.Warning("Examine index {IndexName} is not available — returning no results", SearchConstants.IndexName);
             return SearchResultsDto.Empty(pageNumber, pageSize);
         }
 
-        var contentTypes = ResolveContentTypes(request, options);
+        var contentTypes = ResolveContentTypes(request);
         if (contentTypes is null)
         {
             // Caller asked for content types that are not on the allow-list.
@@ -44,7 +40,7 @@ public sealed class ContentSearchService(
 
         try
         {
-            var query = BuildQuery(index.Searcher, request, contentTypes, options);
+            var query = BuildQuery(index.Searcher, request, contentTypes);
 
             // Paging happens in Lucene, not in memory — the whole point of using the index.
             var skip = (pageNumber - 1) * pageSize;
@@ -55,7 +51,7 @@ public sealed class ContentSearchService(
 
             return new SearchResultsDto
             {
-                Items = results.Select(r => MapHit(r, request.Culture, options)).Where(h => h is not null).Select(h => h!).ToList(),
+                Items = results.Select(r => MapHit(r, request.Culture)).Where(h => h is not null).Select(h => h!).ToList(),
                 TotalResults = total,
                 PageNumber = pageNumber,
                 PageSize = pageSize,
@@ -74,25 +70,25 @@ public sealed class ContentSearchService(
     /// Returns the content types to search, or null when the caller asked for something
     /// outside the configured allow-list.
     /// </summary>
-    private static string[]? ResolveContentTypes(SearchRequest request, SearchOptions options)
+    private static string[]? ResolveContentTypes(SearchRequest request)
     {
         var requested = request.ContentTypes?
             .Where(t => !string.IsNullOrWhiteSpace(t))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray() ?? [];
 
-        if (options.AllowedContentTypes.Length == 0)
+        if (SearchConstants.AllowedContentTypes.Length == 0)
         {
             return requested;
         }
 
         if (requested.Length == 0)
         {
-            return options.AllowedContentTypes;
+            return SearchConstants.AllowedContentTypes;
         }
 
         var disallowed = requested
-            .Where(t => !options.AllowedContentTypes.Contains(t, StringComparer.OrdinalIgnoreCase))
+            .Where(t => !SearchConstants.AllowedContentTypes.Contains(t, StringComparer.OrdinalIgnoreCase))
             .ToArray();
 
         return disallowed.Length > 0 ? null : requested;
@@ -101,8 +97,7 @@ public sealed class ContentSearchService(
     private IQueryExecutor BuildQuery(
         ISearcher searcher,
         SearchRequest request,
-        string[] contentTypes,
-        SearchOptions options)
+        string[] contentTypes)
     {
         var query = searcher.CreateQuery(IndexTypes.Content);
 
@@ -120,10 +115,10 @@ public sealed class ContentSearchService(
             op = op.And().Field(publishedField, "y");
         }
 
-        if (!string.IsNullOrWhiteSpace(request.Query) && options.SearchableFields.Length > 0)
+        if (!string.IsNullOrWhiteSpace(request.Query) && SearchConstants.SearchableFields.Length > 0)
         {
             var term = request.Query.Trim().ToLowerInvariant();
-            op = op.And().GroupedOr(options.SearchableFields, term.MultipleCharacterWildcard());
+            op = op.And().GroupedOr(SearchConstants.SearchableFields, term.MultipleCharacterWildcard());
         }
 
         if (request.Filters is { Count: > 0 })
@@ -153,7 +148,7 @@ public sealed class ContentSearchService(
     /// Resolves the indexed hit back to published content so the response carries real
     /// values rather than whatever happened to be indexed.
     /// </summary>
-    private SearchHitDto? MapHit(ISearchResult result, string? culture, SearchOptions options)
+    private SearchHitDto? MapHit(ISearchResult result, string? culture)
     {
         if (!int.TryParse(result.Id, out var nodeId)) return null;
 
@@ -169,7 +164,7 @@ public sealed class ContentSearchService(
             Name = cultureInfo?.Name ?? content.Name ?? string.Empty,
             Slug = cultureInfo?.UrlSegment,
             Summary = result.Values.TryGetValue("description", out var description) ? description : null,
-            Image = ResolveImage(content, culture, options),
+            Image = ResolveImage(content, culture),
             Score = result.Score,
         };
     }
@@ -178,9 +173,9 @@ public sealed class ContentSearchService(
     /// Attaches the first configured image property that actually resolves, so a hit can
     /// be rendered as a card without a follow-up request.
     /// </summary>
-    private MediaDto? ResolveImage(IPublishedContent content, string? culture, SearchOptions options)
+    private MediaDto? ResolveImage(IPublishedContent content, string? culture)
     {
-        foreach (var alias in options.ImageFieldAliases)
+        foreach (var alias in SearchConstants.ImageFieldAliases)
         {
             if (string.IsNullOrWhiteSpace(alias)) continue;
 

@@ -3,6 +3,8 @@ using Mofam.Application.Helpers;
 using Mofam.Application.IServices;
 using Mofam.Domain.Constants;
 using Mofam.Domain.Models.Dtos;
+using Mofam.Domain.Options;
+using Microsoft.Extensions.Options;
 using Serilog;
 using Umbraco.Cms.Core.Models.PublishedContent;
 using Umbraco.Extensions;
@@ -14,9 +16,23 @@ public sealed class ApiServcie(
     IComponentMapper componentMapper,
     IPropertyValueMapper valueMapper,
     ISeoMapper seoMapper,
+    ICachePolicy cachePolicy,
+    IOptions<CacheOptions> cacheOptions,
     ILogger logger) : IApiService
 {
+    private const string CacheKeyPrefix = "mofam:page:";
+
     public PageDto? GetPageBySlug(string pageContentTypeAlias, string slug, string? culture)
+    {
+        var cacheKey = $"{CacheKeyPrefix}{pageContentTypeAlias}:{culture}:{Normalise(slug)}";
+
+        return cachePolicy.GetOrCreate(
+            cacheKey,
+            cacheOptions.Value.Page,
+            () => BuildPage(pageContentTypeAlias, slug, culture));
+    }
+
+    private PageDto? BuildPage(string pageContentTypeAlias, string slug, string? culture)
     {
         using var tracer = new FunctionTracer(loginfile: true);
 

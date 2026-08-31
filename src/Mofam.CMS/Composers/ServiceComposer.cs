@@ -18,17 +18,23 @@ public sealed class ServiceComposer : IComposer
         builder.Services.AddScoped<IStartupService, StartupService>();
         builder.Services.AddScoped<IComponentMapper, ComponentMapper>();
         builder.Services.AddScoped<IPropertyValueMapper, PropertyValueMapper>();
+        builder.Services.AddScoped<ICachePolicy, CachePolicy>();
         builder.Services.AddScoped<ISeoMapper, SeoMapper>();
         builder.Services.AddScoped<ISiteRootResolver, SiteRootResolver>();
         builder.Services.AddScoped<IMediaUrlBuilder, MediaUrlBuilder>();
-        //builder.Services.AddScoped<IContentSearchService, ContentSearchService>();
+        // Required: WebApiController takes ISiteSearchService in its constructor, so
+        // leaving this unregistered breaks every endpoint on that controller, not just search.
+        builder.Services.AddScoped<ISiteSearchService, SiteSearchService>();
+        builder.Services.AddScoped<IFilterService, FilterService>();
         builder.Services.AddScoped<ApiKeyAuthFilter>();
         builder.Services.AddScoped<IDatabaseConnectivityService, DatabaseConnectivityService>();
 
         builder.Services.Configure<SecurityOptions>(
             builder.Config.GetSection(SecurityOptions.SectionName));
 
-        //builder.Services.Configure<SearchOptions>(
-        //    builder.Config.GetSection(SearchOptions.SectionName));
+        builder.Services.Configure<CacheOptions>(
+            builder.Config.GetSection(CacheOptions.SectionName));
+
+
     }
 }
