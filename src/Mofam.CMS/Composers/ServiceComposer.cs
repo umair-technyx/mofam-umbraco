@@ -20,6 +20,7 @@ public sealed class ServiceComposer : IComposer
         builder.Services.AddScoped<IPropertyValueMapper, PropertyValueMapper>();
         builder.Services.AddScoped<ICachePolicy, CachePolicy>();
         builder.Services.AddScoped<ISeoMapper, SeoMapper>();
+        builder.Services.AddScoped<IPageMapper, PageMapper>();
         builder.Services.AddScoped<ISiteRootResolver, SiteRootResolver>();
         builder.Services.AddScoped<IMediaUrlBuilder, MediaUrlBuilder>();
         // Required: WebApiController takes ISiteSearchService in its constructor, so

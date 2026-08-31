@@ -1,6 +1,6 @@
 using Mofam.Domain.Models.Dtos;
 
-namespace Mofam.Application.Abstractions;
+namespace Mofam.Application.IServices;
 
 /// <summary>
 /// Builds the available filter options for a listing type, derived from published

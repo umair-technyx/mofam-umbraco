@@ -13,8 +13,15 @@ public static class SearchConstants
     /// </summary>
     public const string IndexName = "ExternalIndex";
 
-    /// <summary>Index fields a free-text term is matched against.</summary>
-    public static readonly string[] SearchableFields = ["nodeName", "title", "description"];
+    /// <summary>
+    /// Index fields a free-text term is matched against.
+    /// <para>
+    /// List the bare alias only. Umbraco indexes culture-variant properties with a
+    /// culture suffix (<c>title_en</c>) and invariant ones without, so the query expands
+    /// each name into both forms at query time.
+    /// </para>
+    /// </summary>
+    public static readonly string[] SearchableFields = ["title", "description"];
 
     /// <summary>
     /// Content types callers may search. Anything not listed is unreachable through the
@@ -22,16 +29,8 @@ public static class SearchConstants
     /// </summary>
     public static readonly string[] AllowedContentTypes =
     [
-        CmsConstants.ContentTypes.Page,
         CmsConstants.ContentTypes.Service,
-        CmsConstants.ContentTypes.ServiceCategory,
     ];
-
-    /// <summary>Property aliases checked, in order, for a thumbnail on a search hit.</summary>
-    public static readonly string[] ImageFieldAliases = ["thumbnailImageWeb", "thumbnailImage", "image"];
-
-    public const int DefaultPageSize = 10;
-    public const int MaxPageSize = 50;
 
     /// <summary>
     /// Filters exposed per content type. Options are every published node of

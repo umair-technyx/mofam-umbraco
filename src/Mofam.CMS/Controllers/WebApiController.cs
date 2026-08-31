@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
-using Mofam.Application.Abstractions;
 using Mofam.Application.IServices;
 using Mofam.Domain.Constants;
 using Mofam.Domain.Models.Common;

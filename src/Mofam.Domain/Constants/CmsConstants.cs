@@ -48,6 +48,12 @@ public static class CmsConstants
 
         public const string Title = "title";
         public const string Categories = "categories";
+
+        /// <summary>
+        /// Components rendered only on a detail page. Excluded from listing/search
+        /// responses, which never render them.
+        /// </summary>
+        public const string DetailPageComponents = "detailPageComponents";
     }
 
     /// <summary>
@@ -86,6 +92,20 @@ public static class CmsConstants
         public const string CustomPriority = "customPriority";
         public const string CustomChangeFrequency = "customchangeFrequency";
         public const string LastUpdatedDate = "lastUpdatedDate";
+
+        /// <summary>
+        /// Every SEO alias, so listing responses can exclude them in one step. SEO is
+        /// only meaningful on a detail page.
+        /// </summary>
+        public static readonly string[] All =
+        [
+            MetaTitle, MetaDescription, MetaKeywords, MetaCanonicalLink, MetaSchemaJson,
+            RobotsIndex, RobotsFollow,
+            OgTitle, OgDescription, OgType, OgPageUrl, OgImage, OpenGraphImage, OpenGraphImageExternal,
+            TwitterTitle, TwitterDescription, TwitterUrl, TwitterImage,
+            HreflangDefault, HreflangEnglish, HreflangArabic,
+            HideFromSitemap, CustomPriority, CustomChangeFrequency, LastUpdatedDate,
+        ];
     }
 
     /// <summary>Properties on the site root, grouped by the tab they sit under.</summary>

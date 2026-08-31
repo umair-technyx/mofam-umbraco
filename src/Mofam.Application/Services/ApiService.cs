@@ -1,10 +1,10 @@
+using Microsoft.Extensions.Options;
 using Mofam.Application.Abstractions;
 using Mofam.Application.Helpers;
 using Mofam.Application.IServices;
 using Mofam.Domain.Constants;
 using Mofam.Domain.Models.Dtos;
 using Mofam.Domain.Options;
-using Microsoft.Extensions.Options;
 using Serilog;
 using Umbraco.Cms.Core.Models.PublishedContent;
 using Umbraco.Extensions;
@@ -13,23 +13,22 @@ namespace Mofam.Application.Services;
 
 public sealed class ApiServcie(
     ISiteRootResolver siteRootResolver,
-    IComponentMapper componentMapper,
+    IPageMapper pageMapper,
     IPropertyValueMapper valueMapper,
-    ISeoMapper seoMapper,
     ICachePolicy cachePolicy,
     IOptions<CacheOptions> cacheOptions,
     ILogger logger) : IApiService
 {
     private const string CacheKeyPrefix = "mofam:page:";
 
-    public PageDto? GetPageBySlug(string pageContentTypeAlias, string slug, string? culture)
+    public PageDto? GetPageBySlug(string contentTypeAlias, string slug, string? culture)
     {
-        var cacheKey = $"{CacheKeyPrefix}{pageContentTypeAlias}:{culture}:{Normalise(slug)}";
+        var cacheKey = $"{CacheKeyPrefix}{contentTypeAlias}:{culture}:{Normalise(slug)}";
 
         return cachePolicy.GetOrCreate(
             cacheKey,
             cacheOptions.Value.Page,
-            () => BuildPage(pageContentTypeAlias, slug, culture));
+            () => BuildPage(contentTypeAlias, slug, culture));
     }
 
     private PageDto? BuildPage(string pageContentTypeAlias, string slug, string? culture)
@@ -38,7 +37,6 @@ public sealed class ApiServcie(
 
         try
         {
-            var cultureKey = culture ?? string.Empty;
             var rootAlias = CmsConstants.ContentTypes.RootFor(pageContentTypeAlias);
             var wanted = Normalise(slug);
 
@@ -70,19 +68,8 @@ public sealed class ApiServcie(
                     wanted, matches.Count, pageContentTypeAlias, culture);
             }
 
-            var page = matches[0];
-            page.Cultures.TryGetValue(cultureKey, out var pageCultureInfo);
-
-            var componentsProperty = page.GetProperty(CmsConstants.Fields.Components);
-
-            return new PageDto
-            {
-                Id = page.Key.ToString(),
-                Slug = SlugOf(page, culture) ?? wanted,
-                Title = pageCultureInfo?.Name ?? page.Name ?? string.Empty,
-                Seo = seoMapper.Map(page, culture),
-                Components = componentMapper.MapComponents(componentsProperty, culture),
-            };
+            // Detail mode: everything, including detailPageComponents and SEO.
+            return pageMapper.Map(matches[0], culture, PageMapMode.Detail);
         }
         catch (Exception ex)
         {

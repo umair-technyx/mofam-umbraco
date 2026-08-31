@@ -6,15 +6,15 @@ using Mofam.Domain.Models.Requests;
 using Mofam.Domain.Constants;
 using Serilog;
 using Umbraco.Cms.Core;
-using Umbraco.Cms.Core.Models.PublishedContent;
 using Umbraco.Cms.Infrastructure.Examine;
+using Mofam.Application.IServices;
 
 namespace Mofam.Application.Services;
 
 public sealed class SiteSearchService(
     IExamineManager examineManager,
     IPublishedContentQuery contentQuery,
-    IMediaUrlBuilder mediaUrlBuilder,
+    IPageMapper pageMapper,
     ILogger logger) : ISiteSearchService
 {
     private const string NodeTypeAliasField = "__NodeTypeAlias";
@@ -23,7 +23,7 @@ public sealed class SiteSearchService(
     public SearchResultsDto Search(SearchRequest request)
     {
         var pageNumber = Math.Max(1, request.PageNumber);
-        var pageSize = Math.Clamp(request.PageSize, 1, Math.Max(1, SearchConstants.MaxPageSize));
+        var pageSize = request.PageSize;
 
         if (!examineManager.TryGetIndex(SearchConstants.IndexName, out var index))
         {
@@ -60,41 +60,37 @@ public sealed class SiteSearchService(
         }
         catch (Exception ex)
         {
-            logger.Error(ex, "Search failed. Query={Query}, ContentTypes={ContentTypes}, Culture={Culture}",
-                request.Query, string.Join(",", contentTypes), request.Culture);
+            logger.Error(ex, "Search failed. Query={Query}, ContentType={ContentType}, Culture={Culture}",
+                request.Query, request.ContentType, request.Culture);
             return SearchResultsDto.Empty(pageNumber, pageSize);
         }
     }
 
     /// <summary>
-    /// Returns the content types to search, or null when the caller asked for something
-    /// outside the configured allow-list.
+    /// The content types to search. A single requested type is honoured when it is on the
+    /// allow-list; null means the caller asked for something it may not reach, and an
+    /// omitted type falls back to everything allowed.
     /// </summary>
     private static string[]? ResolveContentTypes(SearchRequest request)
     {
-        var requested = request.ContentTypes?
-            .Where(t => !string.IsNullOrWhiteSpace(t))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray() ?? [];
+        var requested = request.ContentType?.Trim();
 
-        if (SearchConstants.AllowedContentTypes.Length == 0)
-        {
-            return requested;
-        }
-
-        if (requested.Length == 0)
+        if (string.IsNullOrEmpty(requested))
         {
             return SearchConstants.AllowedContentTypes;
         }
 
-        var disallowed = requested
-            .Where(t => !SearchConstants.AllowedContentTypes.Contains(t, StringComparer.OrdinalIgnoreCase))
-            .ToArray();
+        if (SearchConstants.AllowedContentTypes.Length == 0)
+        {
+            return [requested];
+        }
 
-        return disallowed.Length > 0 ? null : requested;
+        return SearchConstants.AllowedContentTypes.Contains(requested, StringComparer.OrdinalIgnoreCase)
+            ? [requested]
+            : null;
     }
 
-    private IQueryExecutor BuildQuery(
+    private IBooleanOperation BuildQuery(
         ISearcher searcher,
         SearchRequest request,
         string[] contentTypes)
@@ -118,7 +114,8 @@ public sealed class SiteSearchService(
         if (!string.IsNullOrWhiteSpace(request.Query) && SearchConstants.SearchableFields.Length > 0)
         {
             var term = request.Query.Trim().ToLowerInvariant();
-            op = op.And().GroupedOr(SearchConstants.SearchableFields, term.MultipleCharacterWildcard());
+            op = op.And().GroupedOr(ExpandForCulture(SearchConstants.SearchableFields, request.Culture),
+                                    term.MultipleCharacterWildcard());
         }
 
         if (request.Filters is { Count: > 0 })
@@ -128,69 +125,66 @@ public sealed class SiteSearchService(
                 var clean = values?.Where(v => !string.IsNullOrWhiteSpace(v)).ToArray() ?? [];
                 if (string.IsNullOrWhiteSpace(field) || clean.Length == 0) continue;
 
-                op = op.And().GroupedOr([field], clean);
+                op = op.And().GroupedOr(ExpandForCulture([field], request.Culture), FilterValues(clean));
             }
         }
 
-        return ApplySort(op, request.SortBy);
+        return op;
     }
 
-    // OrderBy/OrderByDescending return IOrdering, so the shared type here is IQueryExecutor.
-    private static IQueryExecutor ApplySort(IBooleanOperation op, SearchSortBy sortBy) => sortBy switch
+    /// <summary>
+    /// Umbraco indexes a culture-variant property as <c>alias_culture</c> and an invariant
+    /// one as plain <c>alias</c>. Which applies depends on how the doctype is configured,
+    /// so both names are queried.
+    /// </summary>
+    private static string[] ExpandForCulture(string[] aliases, string? culture)
     {
-        SearchSortBy.NewestFirst => op.OrderByDescending(new SortableField("updateDate", SortType.Long)),
-        SearchSortBy.OldestFirst => op.OrderBy(new SortableField("updateDate", SortType.Long)),
-        SearchSortBy.NameAscending => op.OrderBy(new SortableField("nodeName", SortType.String)),
-        _ => op, // Relevance is Lucene's default ordering.
-    };
+        if (string.IsNullOrWhiteSpace(culture)) return aliases;
+
+        var expanded = new List<string>(aliases.Length * 2);
+
+        foreach (var alias in aliases)
+        {
+            expanded.Add(alias);
+            expanded.Add($"{alias}_{culture}");
+        }
+
+        return [.. expanded];
+    }
 
     /// <summary>
-    /// Resolves the indexed hit back to published content so the response carries real
-    /// values rather than whatever happened to be indexed.
+    /// The filters endpoint hands out node keys as plain GUIDs, but Examine stores picker
+    /// values as UDIs — <c>umb://document/6395c1e5792e407f804a28bdd3972439</c>. Both the
+    /// UDI and its dash-less GUID token are queried so the round-trip matches.
     /// </summary>
-    private SearchHitDto? MapHit(ISearchResult result, string? culture)
+    private static string[] FilterValues(string[] values)
+    {
+        var result = new List<string>(values.Length * 3);
+
+        foreach (var value in values)
+        {
+            result.Add(value);
+
+            if (Guid.TryParse(value, out var guid))
+            {
+                result.Add(new GuidUdi(Umbraco.Cms.Core.Constants.UdiEntityType.Document, guid).ToString());
+                result.Add(guid.ToString("N"));
+            }
+        }
+
+        return [.. result.Distinct(StringComparer.OrdinalIgnoreCase)];
+    }
+
+
+    /// <summary>
+    /// Resolves the indexed hit back to published content and maps it in listing mode —
+    /// the same model the detail endpoint returns, minus detailPageComponents and SEO.
+    /// </summary>
+    private PageDto? MapHit(ISearchResult result, string? culture)
     {
         if (!int.TryParse(result.Id, out var nodeId)) return null;
 
         var content = contentQuery.Content(nodeId);
-        if (content is null) return null;
-
-        content.Cultures.TryGetValue(culture ?? string.Empty, out var cultureInfo);
-
-        return new SearchHitDto
-        {
-            Id = content.Key.ToString(),
-            ContentType = content.ContentType.Alias,
-            Name = cultureInfo?.Name ?? content.Name ?? string.Empty,
-            Slug = cultureInfo?.UrlSegment,
-            Summary = result.Values.TryGetValue("description", out var description) ? description : null,
-            Image = ResolveImage(content, culture),
-            Score = result.Score,
-        };
-    }
-
-    /// <summary>
-    /// Attaches the first configured image property that actually resolves, so a hit can
-    /// be rendered as a card without a follow-up request.
-    /// </summary>
-    private MediaDto? ResolveImage(IPublishedContent content, string? culture)
-    {
-        foreach (var alias in SearchConstants.ImageFieldAliases)
-        {
-            if (string.IsNullOrWhiteSpace(alias)) continue;
-
-            var value = content.GetProperty(alias)?.GetValue(culture);
-
-            var image = value switch
-            {
-                IEnumerable<IPublishedContent> many => mediaUrlBuilder.BuildMany(many, culture).FirstOrDefault(),
-                IPublishedContent one => mediaUrlBuilder.Build(one, culture),
-                _ => null,
-            };
-
-            if (image is not null) return image;
-        }
-
-        return null;
+        return content is null ? null : pageMapper.Map(content, culture, PageMapMode.Listing);
     }
 }

@@ -1,7 +1,7 @@
 using Mofam.Domain.Models.Dtos;
 using Mofam.Domain.Models.Requests;
 
-namespace Mofam.Application.Abstractions;
+namespace Mofam.Application.IServices;
 
 /// <summary>
 /// Examine-backed content search. Filtering, paging and sorting are pushed into the
