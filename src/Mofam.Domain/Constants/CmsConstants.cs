@@ -16,6 +16,7 @@ public static class CmsConstants
     {
         public const string Page = "page";
         public const string Service = "service";
+        public const string Services = "services";
         public const string ServiceCategory = "serviceCategory";
 
 
@@ -26,6 +27,7 @@ public static class CmsConstants
         public static string RootFor(string pageContentTypeAlias) => pageContentTypeAlias switch
         {
             Page => RootAlias.Site,
+            Service => ContentTypes.Services,
             _ => RootAlias.Site,
         };
     }

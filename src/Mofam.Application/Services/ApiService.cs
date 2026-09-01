@@ -45,18 +45,15 @@ public sealed class ApiServcie(
             var channelRoot = siteRootResolver.GetRoot(rootAlias);
             if (channelRoot is null) return null;
 
-            // Matches the editor-controlled "slug" property, NOT Umbraco's generated
-            // UrlSegment — the two diverge as soon as an editor sets a slug that differs
-            // from the node name.
-            // NOTE: obsolete Children property — see SiteRootResolver for the Umbraco 18 migration note.
-#pragma warning disable CS0618
-            var matches = channelRoot.Children
+            // Searches the whole subtree, not just direct children: pages sit directly
+            // under the site root, but services live inside a "Services" container and
+            // are therefore grandchildren.
+            var matches = Descendants(channelRoot)
                 .Where(c =>
                     c.ContentType.Alias == pageContentTypeAlias &&
                     c.IsPublished(culture) &&
                     string.Equals(SlugOf(c, culture), wanted, StringComparison.OrdinalIgnoreCase))
                 .ToList();
-#pragma warning restore CS0618
 
             if (matches.Count == 0) return null;
 
@@ -78,6 +75,26 @@ public sealed class ApiServcie(
                 "GetPageBySlug failed. PageContentTypeAlias={PageContentTypeAlias}, Slug={Slug}, Culture={Culture}",
                 pageContentTypeAlias, slug, culture);
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Walks the subtree beneath <paramref name="root"/>, root excluded. Lazy, so a match
+    /// near the top stops the walk rather than enumerating the whole site.
+    /// </summary>
+    private static IEnumerable<IPublishedContent> Descendants(IPublishedContent root)
+    {
+        // NOTE: obsolete Children property — see SiteRootResolver for the Umbraco 18 migration note.
+#pragma warning disable CS0618
+        foreach (var child in root.Children)
+#pragma warning restore CS0618
+        {
+            yield return child;
+
+            foreach (var descendant in Descendants(child))
+            {
+                yield return descendant;
+            }
         }
     }
 

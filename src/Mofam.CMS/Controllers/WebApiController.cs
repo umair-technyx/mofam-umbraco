@@ -19,13 +19,15 @@ public sealed class WebApiController(
     IFilterService filterService,
     ISiteSearchService searchService) : ControllerBase
 {
-    [HttpGet("pages/{culture}/{slug}")]
-    public ActionResult<ApiResponse<PageDto>> GetBySlug(string culture, string slug)
+    /// <summary>
+    /// Detail response for any allowed content type — page, service, and so on. The
+    /// front end maps its own URL segment to a content type: /services/x -> service/x.
+    /// </summary>
+    [HttpGet("{culture}/{contentType}/{slug}")]
+    public ActionResult<ApiResponse<PageDto>> GetDetail(string culture, string contentType, string slug)
     {
-        var page = apiService.GetPageBySlug(
-            CmsConstants.ContentTypes.Page,
-            slug,
-            culture);
+
+        var page = apiService.GetPageBySlug(contentType, slug, culture);
 
         return page is null
             ? NotFound(ApiResponse<PageDto>.NotFound("Page not found."))
