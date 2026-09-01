@@ -7,6 +7,8 @@ using Mofam.Infrastructure.Abstractions;
 using Mofam.Infrastructure.Filters;
 using Mofam.Infrastructure.Services;
 using Mofam.Application.IServices;
+using Mofam.Application.Notifications;
+using Umbraco.Cms.Core.Notifications;
 
 namespace Mofam.CMS.Composers;
 
@@ -29,6 +31,9 @@ public sealed class ServiceComposer : IComposer
         builder.Services.AddScoped<IFilterService, FilterService>();
         builder.Services.AddScoped<ApiKeyAuthFilter>();
         builder.Services.AddScoped<IDatabaseConnectivityService, DatabaseConnectivityService>();
+
+        // Normalises the slug and blocks duplicates before content is saved.
+        builder.AddNotificationHandler<ContentSavingNotification, SlugNotificationHandler>();
 
         builder.Services.Configure<SecurityOptions>(
             builder.Config.GetSection(SecurityOptions.SectionName));

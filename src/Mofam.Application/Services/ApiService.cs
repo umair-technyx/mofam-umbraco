@@ -7,6 +7,7 @@ using Mofam.Domain.Models.Dtos;
 using Mofam.Domain.Options;
 using Serilog;
 using Umbraco.Cms.Core.Models.PublishedContent;
+using Umbraco.Cms.Core.Strings;
 using Umbraco.Extensions;
 
 namespace Mofam.Application.Services;
@@ -16,6 +17,7 @@ public sealed class ApiServcie(
     IPageMapper pageMapper,
     IPropertyValueMapper valueMapper,
     ICachePolicy cachePolicy,
+    IShortStringHelper shortStringHelper,
     IOptions<CacheOptions> cacheOptions,
     ILogger logger) : IApiService
 {
@@ -23,7 +25,7 @@ public sealed class ApiServcie(
 
     public PageDto? GetPageBySlug(string contentTypeAlias, string slug, string? culture)
     {
-        var cacheKey = $"{CacheKeyPrefix}{contentTypeAlias}:{culture}:{Normalise(slug)}";
+        var cacheKey = $"{CacheKeyPrefix}{contentTypeAlias}:{culture}:{CommonHelper.NormaliseSlug(slug, shortStringHelper)}";
 
         return cachePolicy.GetOrCreate(
             cacheKey,
@@ -38,7 +40,7 @@ public sealed class ApiServcie(
         try
         {
             var rootAlias = CmsConstants.ContentTypes.RootFor(pageContentTypeAlias);
-            var wanted = Normalise(slug);
+            var wanted = CommonHelper.NormaliseSlug(slug, shortStringHelper);
 
             if (wanted is null) return null;
 
@@ -99,15 +101,6 @@ public sealed class ApiServcie(
     }
 
     private string? SlugOf(IPublishedContent content, string? culture) =>
-        Normalise(valueMapper.Text(content, CmsConstants.Fields.Slug, culture));
-
-    /// <summary>
-    /// Editors paste slugs with stray slashes and whitespace; normalise both sides so
-    /// "/about-us/" and "about-us" are the same page.
-    /// </summary>
-    private static string? Normalise(string? value)
-    {
-        var trimmed = value?.Trim().Trim('/').Trim();
-        return string.IsNullOrEmpty(trimmed) ? null : trimmed;
-    }
+        CommonHelper.NormaliseSlug(
+            valueMapper.Text(content, CmsConstants.Fields.Slug, culture), shortStringHelper);
 }
