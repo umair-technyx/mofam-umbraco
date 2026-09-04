@@ -18,6 +18,8 @@ public static class CmsConstants
         public const string Service = "service";
         public const string Services = "services";
         public const string ServiceCategory = "serviceCategory";
+        public const string ServiceCategories = "serviceCategories";
+        public const string Categories = "categories";
 
 
         /// <summary>
@@ -28,6 +30,7 @@ public static class CmsConstants
         {
             Page => RootAlias.Site,
             Service => ContentTypes.Services,
+            ServiceCategory => ContentTypes.Categories,
             _ => RootAlias.Site,
         };
     }
