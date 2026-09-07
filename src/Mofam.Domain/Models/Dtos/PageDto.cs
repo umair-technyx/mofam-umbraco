@@ -43,5 +43,12 @@ public sealed record PageDto
 public sealed record ComponentDto
 {
     public required string Alias { get; init; }
+
+    /// <summary>
+    /// The component's own properties as a flattened bag — or, when this entry is really a
+    /// content page reached through a picker (rather than an authored Block List/Grid
+    /// element), a nested <see cref="PageDto"/> mapped in <c>Listing</c> shape. A client can
+    /// tell the two apart by checking for <c>id</c>/<c>slug</c>/<c>contentType</c> here.
+    /// </summary>
     public required object Properties { get; init; }
 }

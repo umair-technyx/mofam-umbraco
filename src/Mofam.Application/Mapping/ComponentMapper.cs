@@ -14,7 +14,11 @@ public sealed class ComponentMapper(
     IPropertyValueMapper valueMapper,
     ILogger logger) : IComponentMapper
 {
-    public IReadOnlyList<ComponentDto> MapComponents(IPublishedProperty? componentsProperty, string? culture)
+    public IReadOnlyList<ComponentDto> MapComponents(
+        IPublishedProperty? componentsProperty,
+        string? culture,
+        Func<IPublishedContent, ISet<Guid>, PageDto> resolvePage,
+        ISet<Guid> ancestors)
     {
         if (componentsProperty is null) return [];
 
@@ -28,12 +32,16 @@ public sealed class ComponentMapper(
             }
 
             var value = componentsProperty.GetValue(culture) ?? componentsProperty.GetValue(null);
-            var ancestors = new HashSet<Guid>();
 
             return value switch
             {
-                IEnumerable<IPublishedContent> multiPick => multiPick.Select(c => MapPublishedContent(c, culture, ancestors)).ToList(),
-                IPublishedContent singlePick => [MapPublishedContent(singlePick, culture, ancestors)],
+                // A real page reached directly through this property (e.g. a content
+                // picker, not a Block List/Grid) — shape it the same way any other
+                // picked page is shaped, via the caller's resolver, not as a component.
+                IEnumerable<IPublishedContent> multiPick => multiPick
+                    .Select(c => ToComponentDto(resolvePage(c, ancestors)))
+                    .ToList(),
+                IPublishedContent singlePick => [ToComponentDto(resolvePage(singlePick, ancestors))],
                 _ => [],
             };
         }
@@ -44,10 +52,30 @@ public sealed class ComponentMapper(
         }
     }
 
-    private ComponentDto MapPublishedContent(IPublishedElement content, string? culture, HashSet<Guid> ancestors)
+    /// <summary>Wraps a resolved page reference in the component envelope so callers get one uniform list shape.</summary>
+    private static ComponentDto ToComponentDto(PageDto page) => new()
     {
-        // Guard against genuine cycles only — a fresh set per branch, so the same item
-        // legitimately appearing under two siblings is still mapped in full.
+        Alias = page.ContentType,
+        Properties = page,
+    };
+
+    private ComponentDto MapPublishedContent(
+        IPublishedElement content,
+        string? culture,
+        Func<IPublishedContent, ISet<Guid>, PageDto> resolvePage,
+        HashSet<Guid> ancestors)
+    {
+        // A genuine content page reached from inside an authored element (e.g. a picker
+        // property on a block) is not this mapper's shape to decide — hand it off exactly
+        // like a top-level picked page, so a "grid item" component and a "gridItems" own-
+        // field behave identically.
+        if (content is IPublishedContent pageContent)
+        {
+            return ToComponentDto(resolvePage(pageContent, ancestors));
+        }
+
+        // Guard against genuine cycles only — a fresh branch copy per recursive step, so
+        // the same item legitimately appearing under two siblings is still mapped in full.
         if (ancestors.Contains(content.Key))
         {
             logger.Warning(
@@ -57,7 +85,11 @@ public sealed class ComponentMapper(
             return new ComponentDto
             {
                 Alias = content.ContentType.Alias,
-                Properties = new Dictionary<string, object?>(),
+                Properties = new Dictionary<string, object?>
+                {
+                    ["circularReference"] = true,
+                    ["key"] = content.Key,
+                },
             };
         }
 
@@ -66,11 +98,15 @@ public sealed class ComponentMapper(
         return new ComponentDto
         {
             Alias = content.ContentType.Alias,
-            Properties = MapProperties(content, culture, branch),
+            Properties = MapProperties(content, culture, resolvePage, branch),
         };
     }
 
-    private Dictionary<string, object?> MapProperties(IPublishedElement content, string? culture, HashSet<Guid> ancestors)
+    private Dictionary<string, object?> MapProperties(
+        IPublishedElement content,
+        string? culture,
+        Func<IPublishedContent, ISet<Guid>, PageDto> resolvePage,
+        HashSet<Guid> ancestors)
     {
         var result = new Dictionary<string, object?>();
         foreach (var property in content.Properties)
@@ -78,7 +114,7 @@ public sealed class ComponentMapper(
             try
             {
                 var value = property.GetValue(culture) ?? property.GetValue(null);
-                result[property.Alias] = SanitizeValue(value, culture, ancestors);
+                result[property.Alias] = SanitizeValue(value, culture, resolvePage, ancestors);
             }
             catch (Exception ex)
             {
@@ -92,7 +128,11 @@ public sealed class ComponentMapper(
         return result;
     }
 
-    private object? SanitizeValue(object? value, string? culture, HashSet<Guid> ancestors)
+    private object? SanitizeValue(
+        object? value,
+        string? culture,
+        Func<IPublishedContent, ISet<Guid>, PageDto> resolvePage,
+        HashSet<Guid> ancestors)
     {
         // Primitives, links, media and string lists are shared with every other endpoint.
         if (valueMapper.TryMapLeaf(value, culture, out var leaf))
@@ -100,13 +140,15 @@ public sealed class ComponentMapper(
             return leaf;
         }
 
-        // What's left needs recursion into ComponentDto, which is this mapper's own shape.
+        // Everything from here recurses, either into a real page (resolved by the
+        // caller — PageMapper — never flattened by this mapper) or into this mapper's
+        // own ComponentDto shape for authored Block List/Grid elements.
         return value switch
         {
-            BlockGridModel blockGrid => blockGrid.Select(i => MapPublishedContent(i.Content, culture, ancestors)).ToList(),
-            BlockListModel blockList => blockList.Select(i => MapPublishedContent(i.Content, culture, ancestors)).ToList(),
-            IEnumerable<IPublishedContent> list => list.Select(c => MapPublishedContent(c, culture, ancestors)).ToList(),
-            IPublishedContent content => MapPublishedContent(content, culture, ancestors),
+            BlockGridModel blockGrid => blockGrid.Select(i => MapPublishedContent(i.Content, culture, resolvePage, ancestors)).ToList(),
+            BlockListModel blockList => blockList.Select(i => MapPublishedContent(i.Content, culture, resolvePage, ancestors)).ToList(),
+            IEnumerable<IPublishedContent> pages => pages.Select(c => resolvePage(c, ancestors)).ToList(),
+            IPublishedContent page => resolvePage(page, ancestors),
             _ => value?.ToString(),
         };
     }
