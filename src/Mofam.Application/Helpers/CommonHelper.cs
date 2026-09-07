@@ -43,4 +43,25 @@ public static class CommonHelper
         // Arabic among them; keep the editor's own value rather than wiping it.
         return string.IsNullOrWhiteSpace(cleaned) ? trimmed.ToLowerInvariant() : cleaned;
     }
+
+    /// <summary>
+    /// Umbraco indexes a culture-variant property as <c>alias_culture</c> and an invariant
+    /// one as plain <c>alias</c>. Which applies depends on how the doctype is configured,
+    /// so both names are queried — shared by every Examine lookup (search and the
+    /// slug-based page lookup alike) so they can't drift apart on this rule.
+    /// </summary>
+    public static string[] ExpandForCulture(string[] aliases, string? culture)
+    {
+        if (string.IsNullOrWhiteSpace(culture)) return aliases;
+
+        var expanded = new List<string>(aliases.Length * 2);
+
+        foreach (var alias in aliases)
+        {
+            expanded.Add(alias);
+            expanded.Add($"{alias}_{culture}");
+        }
+
+        return [.. expanded];
+    }
 }

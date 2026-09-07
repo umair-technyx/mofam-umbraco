@@ -1,3 +1,5 @@
+using Examine;
+using Examine.Search;
 using Microsoft.Extensions.Options;
 using Mofam.Application.Abstractions;
 using Mofam.Application.Helpers;
@@ -6,18 +8,19 @@ using Mofam.Domain.Constants;
 using Mofam.Domain.Models.Dtos;
 using Mofam.Domain.Options;
 using Serilog;
-using Umbraco.Cms.Core.Models.PublishedContent;
+using Umbraco.Cms.Core;
 using Umbraco.Cms.Core.Strings;
+using Umbraco.Cms.Infrastructure.Examine;
 using Umbraco.Extensions;
 
 namespace Mofam.Application.Services;
 
 public sealed class ApiServcie(
-    ISiteRootResolver siteRootResolver,
+    IExamineManager examineManager,
+    IPublishedContentQuery contentQuery,
     IPageMapper pageMapper,
-    IPropertyValueMapper valueMapper,
-    ICachePolicy cachePolicy,
     IShortStringHelper shortStringHelper,
+    ICachePolicy cachePolicy,
     IOptions<CacheOptions> cacheOptions,
     ILogger logger) : IApiService
 {
@@ -33,33 +36,47 @@ public sealed class ApiServcie(
             () => BuildPage(contentTypeAlias, slug, culture));
     }
 
+    /// <summary>
+    /// Resolves a page by content type + slug through the Examine index, the same way
+    /// <see cref="SiteSearchService"/> resolves listing/search hits — one lookup mechanism
+    /// for the whole API, rather than this endpoint alone walking the content tree from a
+    /// hardcoded channel root. That tree-walk assumed every node of a given type lives
+    /// directly under one specific container, which breaks the moment an editor reparents
+    /// a node (or restructures the tree) — an assumption Examine's index doesn't need,
+    /// since it just matches content type + slug wherever the node actually lives.
+    /// </summary>
     private PageDto? BuildPage(string pageContentTypeAlias, string slug, string? culture)
     {
         using var tracer = new FunctionTracer(loginfile: true);
 
         try
         {
-            var rootAlias = CmsConstants.ContentTypes.RootFor(pageContentTypeAlias);
             var wanted = CommonHelper.NormaliseSlug(slug, shortStringHelper);
-
             if (wanted is null) return null;
 
-            var channelRoot = siteRootResolver.GetRoot(rootAlias);
-            if (channelRoot is null) return null;
+            if (!examineManager.TryGetIndex(SearchConstants.IndexName, out var index))
+            {
+                logger.Warning(
+                    "Examine index {IndexName} is not available — cannot resolve {ContentType}/{Slug}",
+                    SearchConstants.IndexName, pageContentTypeAlias, slug);
+                return null;
+            }
 
-            // Searches the whole subtree, not just direct children: pages sit directly
-            // under the site root, but services live inside a "Services" container and
-            // are therefore grandchildren.
-            var matches = Descendants(channelRoot)
-                .Where(c =>
-                    c.ContentType.Alias == pageContentTypeAlias &&
-                    c.IsPublished(culture) &&
-                    string.Equals(SlugOf(c, culture), wanted, StringComparison.OrdinalIgnoreCase))
+            var publishedField = string.IsNullOrWhiteSpace(culture)
+                ? SearchConstants.PublishedField
+                : $"{SearchConstants.PublishedField}_{culture}";
+
+            var matches = index.Searcher.CreateQuery(IndexTypes.Content)
+                .Field(SearchConstants.NodeTypeAliasField, pageContentTypeAlias)
+                .And().Field(publishedField, "y")
+                .And().GroupedOr(CommonHelper.ExpandForCulture([CmsConstants.Fields.Slug], culture), [wanted])
+                .Execute()
                 .ToList();
 
             if (matches.Count == 0) return null;
 
-            // Umbraco enforces uniqueness on UrlSegment, but not on a custom text field.
+            // Umbraco enforces uniqueness on UrlSegment, but not on a custom text field —
+            // the index mirrors that same underlying property, so the same caveat applies.
             if (matches.Count > 1)
             {
                 logger.Warning(
@@ -67,8 +84,17 @@ public sealed class ApiServcie(
                     wanted, matches.Count, pageContentTypeAlias, culture);
             }
 
+            if (!int.TryParse(matches[0].Id, out var nodeId)) return null;
+
+            var content = contentQuery.Content(nodeId);
+
+            // Defends against the index briefly lagging the live published-content cache
+            // (e.g. a page was just unpublished) — the tree-walk this replaces never had
+            // this gap, since it read the live cache directly with no index in between.
+            if (content is null || !content.IsPublished(culture)) return null;
+
             // Detail mode: everything, including detailPageComponents and SEO.
-            return pageMapper.Map(matches[0], culture, PageMapMode.Detail);
+            return pageMapper.Map(content, culture, PageMapMode.Detail);
         }
         catch (Exception ex)
         {
@@ -79,28 +105,4 @@ public sealed class ApiServcie(
             throw;
         }
     }
-
-    /// <summary>
-    /// Walks the subtree beneath <paramref name="root"/>, root excluded. Lazy, so a match
-    /// near the top stops the walk rather than enumerating the whole site.
-    /// </summary>
-    private static IEnumerable<IPublishedContent> Descendants(IPublishedContent root)
-    {
-        // NOTE: obsolete Children property — see SiteRootResolver for the Umbraco 18 migration note.
-#pragma warning disable CS0618
-        foreach (var child in root.Children)
-#pragma warning restore CS0618
-        {
-            yield return child;
-
-            foreach (var descendant in Descendants(child))
-            {
-                yield return descendant;
-            }
-        }
-    }
-
-    private string? SlugOf(IPublishedContent content, string? culture) =>
-        CommonHelper.NormaliseSlug(
-            valueMapper.Text(content, CmsConstants.Fields.Slug, culture), shortStringHelper);
 }

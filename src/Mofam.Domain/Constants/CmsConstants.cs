@@ -21,18 +21,16 @@ public static class CmsConstants
         public const string ServiceCategories = "serviceCategories";
         public const string Categories = "categories";
 
-
         /// <summary>
-        /// The channel root a given page type lives under, so callers don't have to pass
-        /// the root alias alongside the page type.
+        /// Content types with their own detail page — independently routable, reached via
+        /// <c>IPageMapper</c>'s Detail mode when requested directly by slug. This is what
+        /// separates a genuine page reference from a reusable component-library node
+        /// (e.g. <c>startingPointsGrid</c>, picked via the <c>components</c> property)
+        /// wherever the same content shows up picked inside another page or component:
+        /// a page type is shaped as a listing reference; anything else picked is rendered
+        /// in full, exactly like an authored Block List element.
         /// </summary>
-        public static string RootFor(string pageContentTypeAlias) => pageContentTypeAlias switch
-        {
-            Page => RootAlias.Site,
-            Service => ContentTypes.Services,
-            ServiceCategory => ContentTypes.Categories,
-            _ => RootAlias.Site,
-        };
+        public static readonly string[] PageTypes = [Page, Service, ServiceCategory];
     }
 
     public static class Cultures

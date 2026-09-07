@@ -4,16 +4,20 @@ using Mofam.Domain.Models.Dtos;
 namespace Mofam.Application.Abstractions;
 
 /// <summary>
-/// Flattens authored Block List/Grid elements into <see cref="ComponentDto"/>s.
+/// Flattens authored Block List/Grid elements — and picked content, whether a reusable
+/// component-library node or a genuine page — into <see cref="ComponentDto"/>s.
 /// <para>
-/// This mapper owns element/block shaping only. It has no notion of
-/// <see cref="Mofam.Application.Abstractions.PageMapMode"/> or <see cref="PageDto"/> — when
-/// recursion meets a genuine <see cref="IPublishedContent"/> (i.e. a real page reached
-/// through a picker, not an authored element), it hands the node to the caller-supplied
-/// <paramref name="resolvePage"/> callback rather than deciding for itself how to shape it.
-/// This keeps the dependency one-directional: <c>PageMapper</c> depends on this interface
-/// (for the ordered <c>components</c>/<c>detailPageComponents</c> list), so this mapper must
-/// never depend back on <c>IPageMapper</c> — that would be a constructor-injection cycle.
+/// This mapper owns element/component shaping only. It has no notion of
+/// <see cref="Mofam.Application.Abstractions.PageMapMode"/> or <see cref="PageDto"/> —
+/// when recursion meets a genuine content-type page (one of
+/// <c>Mofam.Domain.Constants.CmsConstants.ContentTypes.PageTypes</c>, independently
+/// routable, as opposed to a reusable component node such as <c>startingPointsGrid</c>
+/// that's meant to render in full wherever it's picked), it hands that node to the
+/// caller-supplied <paramref name="resolvePage"/> callback rather than deciding for itself
+/// how to shape it. This keeps the dependency one-directional: <c>PageMapper</c> depends
+/// on this interface (for the ordered <c>components</c>/<c>detailPageComponents</c> list),
+/// so this mapper must never depend back on <c>IPageMapper</c> — that would be a
+/// constructor-injection cycle.
 /// </para>
 /// </summary>
 public interface IComponentMapper

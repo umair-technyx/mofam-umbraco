@@ -1,5 +1,6 @@
 using Mofam.Application.Abstractions;
 using Mofam.Application.Helpers;
+using Mofam.Domain.Constants;
 using Mofam.Domain.Models.Dtos;
 using Serilog;
 using Umbraco.Cms.Core.Models;
@@ -33,15 +34,17 @@ public sealed class ComponentMapper(
 
             var value = componentsProperty.GetValue(culture) ?? componentsProperty.GetValue(null);
 
+            // Every entry here is a real IPublishedContent — whether it's a genuine page
+            // or a reusable component-library node is decided per item inside
+            // MapPublishedContent, since a single picker (this property, or an own-field
+            // picker like Service.Categories, both land here) can in principle point at
+            // either kind.
             return value switch
             {
-                // A real page reached directly through this property (e.g. a content
-                // picker, not a Block List/Grid) — shape it the same way any other
-                // picked page is shaped, via the caller's resolver, not as a component.
                 IEnumerable<IPublishedContent> multiPick => multiPick
-                    .Select(c => ToComponentDto(resolvePage(c, ancestors)))
+                    .Select(c => MapPublishedContent(c, culture, resolvePage, ancestors))
                     .ToList(),
-                IPublishedContent singlePick => [ToComponentDto(resolvePage(singlePick, ancestors))],
+                IPublishedContent singlePick => [MapPublishedContent(singlePick, culture, resolvePage, ancestors)],
                 _ => [],
             };
         }
@@ -59,17 +62,23 @@ public sealed class ComponentMapper(
         Properties = page,
     };
 
+    /// <summary>
+    /// A picker can point at two different kinds of content, and only the content type
+    /// tells them apart: a genuine page (<see cref="CmsConstants.ContentTypes.PageTypes"/>
+    /// — independently navigable, so it's shaped as a listing reference via
+    /// <paramref name="resolvePage"/>) or a reusable component-library node (e.g.
+    /// <c>startingPointsGrid</c>) meant to render in full wherever it's picked, exactly
+    /// like an authored Block List element. Everything below this check is the
+    /// flatten-in-full path, unchanged for either an element or a component-library node.
+    /// </summary>
     private ComponentDto MapPublishedContent(
         IPublishedElement content,
         string? culture,
         Func<IPublishedContent, ISet<Guid>, PageDto> resolvePage,
-        HashSet<Guid> ancestors)
+        ISet<Guid> ancestors)
     {
-        // A genuine content page reached from inside an authored element (e.g. a picker
-        // property on a block) is not this mapper's shape to decide — hand it off exactly
-        // like a top-level picked page, so a "grid item" component and a "gridItems" own-
-        // field behave identically.
-        if (content is IPublishedContent pageContent)
+        if (content is IPublishedContent pageContent
+            && CmsConstants.ContentTypes.PageTypes.Contains(pageContent.ContentType.Alias))
         {
             return ToComponentDto(resolvePage(pageContent, ancestors));
         }
@@ -106,7 +115,7 @@ public sealed class ComponentMapper(
         IPublishedElement content,
         string? culture,
         Func<IPublishedContent, ISet<Guid>, PageDto> resolvePage,
-        HashSet<Guid> ancestors)
+        ISet<Guid> ancestors)
     {
         var result = new Dictionary<string, object?>();
         foreach (var property in content.Properties)
@@ -132,7 +141,7 @@ public sealed class ComponentMapper(
         object? value,
         string? culture,
         Func<IPublishedContent, ISet<Guid>, PageDto> resolvePage,
-        HashSet<Guid> ancestors)
+        ISet<Guid> ancestors)
     {
         // Primitives, links, media and string lists are shared with every other endpoint.
         if (valueMapper.TryMapLeaf(value, culture, out var leaf))
@@ -140,15 +149,14 @@ public sealed class ComponentMapper(
             return leaf;
         }
 
-        // Everything from here recurses, either into a real page (resolved by the
-        // caller — PageMapper — never flattened by this mapper) or into this mapper's
-        // own ComponentDto shape for authored Block List/Grid elements.
+        // Everything from here recurses into MapPublishedContent, which decides per item
+        // whether it's a page reference or a component-library node to flatten.
         return value switch
         {
             BlockGridModel blockGrid => blockGrid.Select(i => MapPublishedContent(i.Content, culture, resolvePage, ancestors)).ToList(),
             BlockListModel blockList => blockList.Select(i => MapPublishedContent(i.Content, culture, resolvePage, ancestors)).ToList(),
-            IEnumerable<IPublishedContent> pages => pages.Select(c => resolvePage(c, ancestors)).ToList(),
-            IPublishedContent page => resolvePage(page, ancestors),
+            IEnumerable<IPublishedContent> pages => pages.Select(c => MapPublishedContent(c, culture, resolvePage, ancestors)).ToList(),
+            IPublishedContent page => MapPublishedContent(page, culture, resolvePage, ancestors),
             _ => value?.ToString(),
         };
     }

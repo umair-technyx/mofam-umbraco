@@ -1,6 +1,7 @@
 using Examine;
 using Examine.Search;
 using Mofam.Application.Abstractions;
+using Mofam.Application.Helpers;
 using Mofam.Domain.Models.Dtos;
 using Mofam.Domain.Models.Requests;
 using Mofam.Domain.Constants;
@@ -17,9 +18,6 @@ public sealed class SiteSearchService(
     IPageMapper pageMapper,
     ILogger logger) : ISiteSearchService
 {
-    private const string NodeTypeAliasField = "__NodeTypeAlias";
-    private const string PublishedField = "__Published";
-
     public SearchResultsDto Search(SearchRequest request)
     {
         var pageNumber = Math.Max(1, request.PageNumber);
@@ -99,11 +97,11 @@ public sealed class SiteSearchService(
 
         // Culture-variant content is flagged per culture; invariant content uses the bare field.
         var publishedField = string.IsNullOrWhiteSpace(request.Culture)
-            ? PublishedField
-            : $"{PublishedField}_{request.Culture}";
+            ? SearchConstants.PublishedField
+            : $"{SearchConstants.PublishedField}_{request.Culture}";
 
         IBooleanOperation op = contentTypes.Length > 0
-            ? query.GroupedOr([NodeTypeAliasField], contentTypes)
+            ? query.GroupedOr([SearchConstants.NodeTypeAliasField], contentTypes)
             : query.Field(publishedField, "y");
 
         if (contentTypes.Length > 0)
@@ -114,7 +112,7 @@ public sealed class SiteSearchService(
         if (!string.IsNullOrWhiteSpace(request.Query) && SearchConstants.SearchableFields.Length > 0)
         {
             var term = request.Query.Trim().ToLowerInvariant();
-            op = op.And().GroupedOr(ExpandForCulture(SearchConstants.SearchableFields, request.Culture),
+            op = op.And().GroupedOr(CommonHelper.ExpandForCulture(SearchConstants.SearchableFields, request.Culture),
                                     term.MultipleCharacterWildcard());
         }
 
@@ -125,31 +123,11 @@ public sealed class SiteSearchService(
                 var clean = values?.Where(v => !string.IsNullOrWhiteSpace(v)).ToArray() ?? [];
                 if (string.IsNullOrWhiteSpace(field) || clean.Length == 0) continue;
 
-                op = op.And().GroupedOr(ExpandForCulture([field], request.Culture), FilterValues(clean));
+                op = op.And().GroupedOr(CommonHelper.ExpandForCulture([field], request.Culture), FilterValues(clean));
             }
         }
 
         return op;
-    }
-
-    /// <summary>
-    /// Umbraco indexes a culture-variant property as <c>alias_culture</c> and an invariant
-    /// one as plain <c>alias</c>. Which applies depends on how the doctype is configured,
-    /// so both names are queried.
-    /// </summary>
-    private static string[] ExpandForCulture(string[] aliases, string? culture)
-    {
-        if (string.IsNullOrWhiteSpace(culture)) return aliases;
-
-        var expanded = new List<string>(aliases.Length * 2);
-
-        foreach (var alias in aliases)
-        {
-            expanded.Add(alias);
-            expanded.Add($"{alias}_{culture}");
-        }
-
-        return [.. expanded];
     }
 
     /// <summary>

@@ -14,6 +14,19 @@ public static class SearchConstants
     public const string IndexName = "ExternalIndex";
 
     /// <summary>
+    /// Examine's built-in field holding a node's content type alias — set on every
+    /// indexed document regardless of doctype, so any lookup can filter on it directly.
+    /// </summary>
+    public const string NodeTypeAliasField = "__NodeTypeAlias";
+
+    /// <summary>
+    /// Examine's built-in published flag. Culture-variant content is flagged per culture
+    /// (<c>__Published_en</c>); invariant content uses the bare field — callers append the
+    /// culture suffix themselves when one applies.
+    /// </summary>
+    public const string PublishedField = "__Published";
+
+    /// <summary>
     /// Index fields a free-text term is matched against.
     /// <para>
     /// List the bare alias only. Umbraco indexes culture-variant properties with a
