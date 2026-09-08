@@ -49,6 +49,7 @@ public sealed class StartupService(
                 Header = BuildHeader(site, culture),
                 Footer = BuildFooter(site, culture),
                 Dictionary = await GetDictionaryAsync(culture),
+                ContentTypes = CmsConstants.ContentTypes.PageTypes,
             };
         }
         catch (Exception ex)
