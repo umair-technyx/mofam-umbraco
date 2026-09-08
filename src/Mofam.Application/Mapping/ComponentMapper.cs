@@ -1,5 +1,6 @@
 using Mofam.Application.Abstractions;
 using Mofam.Application.Helpers;
+using Mofam.Domain.Constants;
 using Mofam.Domain.Models.Dtos;
 using Serilog;
 using Umbraco.Cms.Core.Models;
@@ -14,7 +15,11 @@ public sealed class ComponentMapper(
     IPropertyValueMapper valueMapper,
     ILogger logger) : IComponentMapper
 {
-    public IReadOnlyList<ComponentDto> MapComponents(IPublishedProperty? componentsProperty, string? culture)
+    public IReadOnlyList<ComponentDto> MapComponents(
+        IPublishedProperty? componentsProperty,
+        string? culture,
+        Func<IPublishedContent, ISet<Guid>, PageDto> resolvePage,
+        ISet<Guid> ancestors)
     {
         if (componentsProperty is null) return [];
 
@@ -28,12 +33,18 @@ public sealed class ComponentMapper(
             }
 
             var value = componentsProperty.GetValue(culture) ?? componentsProperty.GetValue(null);
-            var ancestors = new HashSet<Guid>();
 
+            // Every entry here is a real IPublishedContent — whether it's a genuine page
+            // or a reusable component-library node is decided per item inside
+            // MapPublishedContent, since a single picker (this property, or an own-field
+            // picker like Service.Categories, both land here) can in principle point at
+            // either kind.
             return value switch
             {
-                IEnumerable<IPublishedContent> multiPick => multiPick.Select(c => MapPublishedContent(c, culture, ancestors)).ToList(),
-                IPublishedContent singlePick => [MapPublishedContent(singlePick, culture, ancestors)],
+                IEnumerable<IPublishedContent> multiPick => multiPick
+                    .Select(c => MapPublishedContent(c, culture, resolvePage, ancestors))
+                    .ToList(),
+                IPublishedContent singlePick => [MapPublishedContent(singlePick, culture, resolvePage, ancestors)],
                 _ => [],
             };
         }
@@ -44,10 +55,36 @@ public sealed class ComponentMapper(
         }
     }
 
-    private ComponentDto MapPublishedContent(IPublishedElement content, string? culture, HashSet<Guid> ancestors)
+    /// <summary>Wraps a resolved page reference in the component envelope so callers get one uniform list shape.</summary>
+    private static ComponentDto ToComponentDto(PageDto page) => new()
     {
-        // Guard against genuine cycles only — a fresh set per branch, so the same item
-        // legitimately appearing under two siblings is still mapped in full.
+        Alias = page.ContentType,
+        Properties = page,
+    };
+
+    /// <summary>
+    /// A picker can point at two different kinds of content, and only the content type
+    /// tells them apart: a genuine page (<see cref="CmsConstants.ContentTypes.PageTypes"/>
+    /// — independently navigable, so it's shaped as a listing reference via
+    /// <paramref name="resolvePage"/>) or a reusable component-library node (e.g.
+    /// <c>startingPointsGrid</c>) meant to render in full wherever it's picked, exactly
+    /// like an authored Block List element. Everything below this check is the
+    /// flatten-in-full path, unchanged for either an element or a component-library node.
+    /// </summary>
+    private ComponentDto MapPublishedContent(
+        IPublishedElement content,
+        string? culture,
+        Func<IPublishedContent, ISet<Guid>, PageDto> resolvePage,
+        ISet<Guid> ancestors)
+    {
+        if (content is IPublishedContent pageContent
+            && CmsConstants.ContentTypes.PageTypes.Contains(pageContent.ContentType.Alias))
+        {
+            return ToComponentDto(resolvePage(pageContent, ancestors));
+        }
+
+        // Guard against genuine cycles only — a fresh branch copy per recursive step, so
+        // the same item legitimately appearing under two siblings is still mapped in full.
         if (ancestors.Contains(content.Key))
         {
             logger.Warning(
@@ -57,7 +94,11 @@ public sealed class ComponentMapper(
             return new ComponentDto
             {
                 Alias = content.ContentType.Alias,
-                Properties = new Dictionary<string, object?>(),
+                Properties = new Dictionary<string, object?>
+                {
+                    ["circularReference"] = true,
+                    ["key"] = content.Key,
+                },
             };
         }
 
@@ -66,11 +107,15 @@ public sealed class ComponentMapper(
         return new ComponentDto
         {
             Alias = content.ContentType.Alias,
-            Properties = MapProperties(content, culture, branch),
+            Properties = MapProperties(content, culture, resolvePage, branch),
         };
     }
 
-    private Dictionary<string, object?> MapProperties(IPublishedElement content, string? culture, HashSet<Guid> ancestors)
+    private Dictionary<string, object?> MapProperties(
+        IPublishedElement content,
+        string? culture,
+        Func<IPublishedContent, ISet<Guid>, PageDto> resolvePage,
+        ISet<Guid> ancestors)
     {
         var result = new Dictionary<string, object?>();
         foreach (var property in content.Properties)
@@ -78,7 +123,7 @@ public sealed class ComponentMapper(
             try
             {
                 var value = property.GetValue(culture) ?? property.GetValue(null);
-                result[property.Alias] = SanitizeValue(value, culture, ancestors);
+                result[property.Alias] = SanitizeValue(value, culture, resolvePage, ancestors);
             }
             catch (Exception ex)
             {
@@ -92,7 +137,11 @@ public sealed class ComponentMapper(
         return result;
     }
 
-    private object? SanitizeValue(object? value, string? culture, HashSet<Guid> ancestors)
+    private object? SanitizeValue(
+        object? value,
+        string? culture,
+        Func<IPublishedContent, ISet<Guid>, PageDto> resolvePage,
+        ISet<Guid> ancestors)
     {
         // Primitives, links, media and string lists are shared with every other endpoint.
         if (valueMapper.TryMapLeaf(value, culture, out var leaf))
@@ -100,13 +149,14 @@ public sealed class ComponentMapper(
             return leaf;
         }
 
-        // What's left needs recursion into ComponentDto, which is this mapper's own shape.
+        // Everything from here recurses into MapPublishedContent, which decides per item
+        // whether it's a page reference or a component-library node to flatten.
         return value switch
         {
-            BlockGridModel blockGrid => blockGrid.Select(i => MapPublishedContent(i.Content, culture, ancestors)).ToList(),
-            BlockListModel blockList => blockList.Select(i => MapPublishedContent(i.Content, culture, ancestors)).ToList(),
-            IEnumerable<IPublishedContent> list => list.Select(c => MapPublishedContent(c, culture, ancestors)).ToList(),
-            IPublishedContent content => MapPublishedContent(content, culture, ancestors),
+            BlockGridModel blockGrid => blockGrid.Select(i => MapPublishedContent(i.Content, culture, resolvePage, ancestors)).ToList(),
+            BlockListModel blockList => blockList.Select(i => MapPublishedContent(i.Content, culture, resolvePage, ancestors)).ToList(),
+            IEnumerable<IPublishedContent> pages => pages.Select(c => MapPublishedContent(c, culture, resolvePage, ancestors)).ToList(),
+            IPublishedContent page => MapPublishedContent(page, culture, resolvePage, ancestors),
             _ => value?.ToString(),
         };
     }

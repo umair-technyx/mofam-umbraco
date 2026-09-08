@@ -1,10 +1,10 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
-using Mofam.Application.Abstractions;
 using Mofam.Application.IServices;
 using Mofam.Domain.Constants;
 using Mofam.Domain.Models.Common;
 using Mofam.Domain.Models.Dtos;
+using Mofam.Domain.Models.Requests;
 using Mofam.Infrastructure.Filters;
 
 namespace Mofam.CMS.Controllers;
@@ -13,19 +13,21 @@ namespace Mofam.CMS.Controllers;
 [Route("api/web")]
 [ServiceFilter(typeof(ApiKeyAuthFilter))]
 [EnableRateLimiting("api")]
-// Search is currently disabled — IContentSearchService is not registered in
-// ServiceComposer for now
 public sealed class WebApiController(
     IApiService apiService,
-    IStartupService startupService) : ControllerBase
+    IStartupService startupService,
+    IFilterService filterService,
+    ISiteSearchService searchService) : ControllerBase
 {
-    [HttpGet("pages/{culture}/{slug}")]
-    public ActionResult<ApiResponse<PageDto>> GetBySlug(string culture, string slug)
+    /// <summary>
+    /// Detail response for any allowed content type — page, service, and so on. The
+    /// front end maps its own URL segment to a content type: /services/x -> service/x.
+    /// </summary>
+    [HttpGet("{culture}/{contentType}/{slug}")]
+    public ActionResult<ApiResponse<PageDto>> GetDetail(string culture, string contentType, string slug)
     {
-        var page = apiService.GetPageBySlug(
-            CmsConstants.ContentTypes.Page,
-            slug,
-            culture);
+
+        var page = apiService.GetPageBySlug(contentType, slug, culture);
 
         return page is null
             ? NotFound(ApiResponse<PageDto>.NotFound("Page not found."))
@@ -43,16 +45,35 @@ public sealed class WebApiController(
             : Ok(ApiResponse<Startup>.Ok(startup, "Startup fetched successfully."));
     }
 
-    /// <summary>Examine-backed content search. Paging and sorting happen in the index.</summary>
-    //[HttpPost("search")]
-    //public ActionResult<ApiResponse<SearchResultsDto>> Search([FromBody] SearchRequest request)
-    //{
-    //    if (request is null)
-    //    {
-    //        return BadRequest(ApiResponse<SearchResultsDto>.BadRequest("A search request body is required."));
-    //    }
+    /// <summary>
+    /// Available filter options for a listing type, e.g. the categories actually used by
+    /// published services. Options with no matching content are never returned.
+    /// </summary>
+    [HttpGet("{culture}/filters")]
+    public ActionResult<ApiResponse<FilterDataDto>> GetFilterData(string culture, [FromQuery] string contentType)
+    {
+        if (string.IsNullOrWhiteSpace(contentType))
+        {
+            return BadRequest(ApiResponse<FilterDataDto>.BadRequest("A contentType is required."));
+        }
 
-    //    var results = searchService.Search(request);
-    //    return Ok(ApiResponse<SearchResultsDto>.Ok(results, "Search completed successfully."));
-    //}
+        var data = filterService.GetFilterData(contentType, culture);
+
+        return data is null
+            ? NotFound(ApiResponse<FilterDataDto>.NotFound("No filter data found."))
+            : Ok(ApiResponse<FilterDataDto>.Ok(data, "Filter data fetched successfully."));
+    }
+
+    /// <summary>Examine-backed content search. Paging and sorting happen in the index.</summary>
+    [HttpPost("search")]
+    public ActionResult<ApiResponse<SearchResultsDto>> Search([FromBody] SearchRequest request)
+    {
+        if (request is null)
+        {
+            return BadRequest(ApiResponse<SearchResultsDto>.BadRequest("A search request body is required."));
+        }
+
+        var results = searchService.Search(request);
+        return Ok(ApiResponse<SearchResultsDto>.Ok(results, "Search completed successfully."));
+    }
 }

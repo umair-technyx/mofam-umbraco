@@ -16,18 +16,21 @@ public static class CmsConstants
     {
         public const string Page = "page";
         public const string Service = "service";
+        public const string Services = "services";
         public const string ServiceCategory = "serviceCategory";
-
+        public const string ServiceCategories = "serviceCategories";
+        public const string Categories = "categories";
 
         /// <summary>
-        /// The channel root a given page type lives under, so callers don't have to pass
-        /// the root alias alongside the page type.
+        /// Content types with their own detail page — independently routable, reached via
+        /// <c>IPageMapper</c>'s Detail mode when requested directly by slug. This is what
+        /// separates a genuine page reference from a reusable component-library node
+        /// (e.g. <c>startingPointsGrid</c>, picked via the <c>components</c> property)
+        /// wherever the same content shows up picked inside another page or component:
+        /// a page type is shaped as a listing reference; anything else picked is rendered
+        /// in full, exactly like an authored Block List element.
         /// </summary>
-        public static string RootFor(string pageContentTypeAlias) => pageContentTypeAlias switch
-        {
-            Page => RootAlias.Site,
-            _ => RootAlias.Site,
-        };
+        public static readonly string[] PageTypes = [Page, Service, ServiceCategory];
     }
 
     public static class Cultures
@@ -45,6 +48,15 @@ public static class CmsConstants
         /// generated <c>UrlSegment</c> — page lookups match on this value.
         /// </summary>
         public const string Slug = "slug";
+
+        public const string Title = "title";
+        public const string Categories = "categories";
+
+        /// <summary>
+        /// Components rendered only on a detail page. Excluded from listing/search
+        /// responses, which never render them.
+        /// </summary>
+        public const string DetailPageComponents = "detailPageComponents";
     }
 
     /// <summary>
@@ -83,6 +95,20 @@ public static class CmsConstants
         public const string CustomPriority = "customPriority";
         public const string CustomChangeFrequency = "customchangeFrequency";
         public const string LastUpdatedDate = "lastUpdatedDate";
+
+        /// <summary>
+        /// Every SEO alias, so listing responses can exclude them in one step. SEO is
+        /// only meaningful on a detail page.
+        /// </summary>
+        public static readonly string[] All =
+        [
+            MetaTitle, MetaDescription, MetaKeywords, MetaCanonicalLink, MetaSchemaJson,
+            RobotsIndex, RobotsFollow,
+            OgTitle, OgDescription, OgType, OgPageUrl, OgImage, OpenGraphImage, OpenGraphImageExternal,
+            TwitterTitle, TwitterDescription, TwitterUrl, TwitterImage,
+            HreflangDefault, HreflangEnglish, HreflangArabic,
+            HideFromSitemap, CustomPriority, CustomChangeFrequency, LastUpdatedDate,
+        ];
     }
 
     /// <summary>Properties on the site root, grouped by the tab they sit under.</summary>

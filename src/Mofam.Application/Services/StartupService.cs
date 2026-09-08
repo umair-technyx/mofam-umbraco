@@ -4,6 +4,8 @@ using Mofam.Application.IServices;
 using Mofam.Application.Mapping;
 using Mofam.Domain.Constants;
 using Mofam.Domain.Models.Dtos;
+using Mofam.Domain.Options;
+using Microsoft.Extensions.Options;
 using Serilog;
 using Umbraco.Cms.Core.Models;
 using Umbraco.Cms.Core.Models.PublishedContent;
@@ -16,9 +18,19 @@ public sealed class StartupService(
     ISiteRootResolver siteRootResolver,
     IPropertyValueMapper valueMapper,
     IDictionaryItemService dictionaryItemService,
+    ICachePolicy cachePolicy,
+    IOptions<CacheOptions> cacheOptions,
     ILogger logger) : IStartupService
 {
-    public async Task<Startup?> GetStartupAsync(string? culture)
+    private const string CacheKeyPrefix = "mofam:startup:";
+
+    public Task<Startup?> GetStartupAsync(string? culture) =>
+        cachePolicy.GetOrCreateAsync(
+            $"{CacheKeyPrefix}{culture}",
+            cacheOptions.Value.Startup,
+            () => BuildStartupAsync(culture));
+
+    private async Task<Startup?> BuildStartupAsync(string? culture)
     {
         using var tracer = new FunctionTracer(loginfile: true);
 

@@ -7,6 +7,8 @@ using Mofam.Infrastructure.Abstractions;
 using Mofam.Infrastructure.Filters;
 using Mofam.Infrastructure.Services;
 using Mofam.Application.IServices;
+using Mofam.Application.Notifications;
+using Umbraco.Cms.Core.Notifications;
 
 namespace Mofam.CMS.Composers;
 
@@ -18,17 +20,27 @@ public sealed class ServiceComposer : IComposer
         builder.Services.AddScoped<IStartupService, StartupService>();
         builder.Services.AddScoped<IComponentMapper, ComponentMapper>();
         builder.Services.AddScoped<IPropertyValueMapper, PropertyValueMapper>();
+        builder.Services.AddScoped<ICachePolicy, CachePolicy>();
         builder.Services.AddScoped<ISeoMapper, SeoMapper>();
+        builder.Services.AddScoped<IPageMapper, PageMapper>();
         builder.Services.AddScoped<ISiteRootResolver, SiteRootResolver>();
         builder.Services.AddScoped<IMediaUrlBuilder, MediaUrlBuilder>();
-        //builder.Services.AddScoped<IContentSearchService, ContentSearchService>();
+        // Required: WebApiController takes ISiteSearchService in its constructor, so
+        // leaving this unregistered breaks every endpoint on that controller, not just search.
+        builder.Services.AddScoped<ISiteSearchService, SiteSearchService>();
+        builder.Services.AddScoped<IFilterService, FilterService>();
         builder.Services.AddScoped<ApiKeyAuthFilter>();
         builder.Services.AddScoped<IDatabaseConnectivityService, DatabaseConnectivityService>();
+
+        // Normalises the slug and blocks duplicates before content is saved.
+        builder.AddNotificationHandler<ContentSavingNotification, SlugNotificationHandler>();
 
         builder.Services.Configure<SecurityOptions>(
             builder.Config.GetSection(SecurityOptions.SectionName));
 
-        //builder.Services.Configure<SearchOptions>(
-        //    builder.Config.GetSection(SearchOptions.SectionName));
+        builder.Services.Configure<CacheOptions>(
+            builder.Config.GetSection(CacheOptions.SectionName));
+
+
     }
 }

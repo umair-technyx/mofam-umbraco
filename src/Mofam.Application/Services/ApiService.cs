@@ -1,52 +1,82 @@
+using Examine;
+using Examine.Search;
+using Microsoft.Extensions.Options;
 using Mofam.Application.Abstractions;
 using Mofam.Application.Helpers;
 using Mofam.Application.IServices;
 using Mofam.Domain.Constants;
 using Mofam.Domain.Models.Dtos;
+using Mofam.Domain.Options;
 using Serilog;
-using Umbraco.Cms.Core.Models.PublishedContent;
+using Umbraco.Cms.Core;
+using Umbraco.Cms.Core.Strings;
+using Umbraco.Cms.Infrastructure.Examine;
 using Umbraco.Extensions;
 
 namespace Mofam.Application.Services;
 
 public sealed class ApiServcie(
-    ISiteRootResolver siteRootResolver,
-    IComponentMapper componentMapper,
-    IPropertyValueMapper valueMapper,
-    ISeoMapper seoMapper,
+    IExamineManager examineManager,
+    IPublishedContentQuery contentQuery,
+    IPageMapper pageMapper,
+    IShortStringHelper shortStringHelper,
+    ICachePolicy cachePolicy,
+    IOptions<CacheOptions> cacheOptions,
     ILogger logger) : IApiService
 {
-    public PageDto? GetPageBySlug(string pageContentTypeAlias, string slug, string? culture)
+    private const string CacheKeyPrefix = "mofam:page:";
+
+    public PageDto? GetPageBySlug(string contentTypeAlias, string slug, string? culture)
+    {
+        var cacheKey = $"{CacheKeyPrefix}{contentTypeAlias}:{culture}:{CommonHelper.NormaliseSlug(slug, shortStringHelper)}";
+
+        return cachePolicy.GetOrCreate(
+            cacheKey,
+            cacheOptions.Value.Page,
+            () => BuildPage(contentTypeAlias, slug, culture));
+    }
+
+    /// <summary>
+    /// Resolves a page by content type + slug through the Examine index, the same way
+    /// <see cref="SiteSearchService"/> resolves listing/search hits — one lookup mechanism
+    /// for the whole API, rather than this endpoint alone walking the content tree from a
+    /// hardcoded channel root. That tree-walk assumed every node of a given type lives
+    /// directly under one specific container, which breaks the moment an editor reparents
+    /// a node (or restructures the tree) — an assumption Examine's index doesn't need,
+    /// since it just matches content type + slug wherever the node actually lives.
+    /// </summary>
+    private PageDto? BuildPage(string pageContentTypeAlias, string slug, string? culture)
     {
         using var tracer = new FunctionTracer(loginfile: true);
 
         try
         {
-            var cultureKey = culture ?? string.Empty;
-            var rootAlias = CmsConstants.ContentTypes.RootFor(pageContentTypeAlias);
-            var wanted = Normalise(slug);
-
+            var wanted = CommonHelper.NormaliseSlug(slug, shortStringHelper);
             if (wanted is null) return null;
 
-            var channelRoot = siteRootResolver.GetRoot(rootAlias);
-            if (channelRoot is null) return null;
+            if (!examineManager.TryGetIndex(SearchConstants.IndexName, out var index))
+            {
+                logger.Warning(
+                    "Examine index {IndexName} is not available — cannot resolve {ContentType}/{Slug}",
+                    SearchConstants.IndexName, pageContentTypeAlias, slug);
+                return null;
+            }
 
-            // Matches the editor-controlled "slug" property, NOT Umbraco's generated
-            // UrlSegment — the two diverge as soon as an editor sets a slug that differs
-            // from the node name.
-            // NOTE: obsolete Children property — see SiteRootResolver for the Umbraco 18 migration note.
-#pragma warning disable CS0618
-            var matches = channelRoot.Children
-                .Where(c =>
-                    c.ContentType.Alias == pageContentTypeAlias &&
-                    c.IsPublished(culture) &&
-                    string.Equals(SlugOf(c, culture), wanted, StringComparison.OrdinalIgnoreCase))
+            var publishedField = string.IsNullOrWhiteSpace(culture)
+                ? SearchConstants.PublishedField
+                : $"{SearchConstants.PublishedField}_{culture}";
+
+            var matches = index.Searcher.CreateQuery(IndexTypes.Content)
+                .Field(SearchConstants.NodeTypeAliasField, pageContentTypeAlias)
+                .And().Field(publishedField, "y")
+                .And().GroupedOr(CommonHelper.ExpandForCulture([CmsConstants.Fields.Slug], culture), [wanted])
+                .Execute()
                 .ToList();
-#pragma warning restore CS0618
 
             if (matches.Count == 0) return null;
 
-            // Umbraco enforces uniqueness on UrlSegment, but not on a custom text field.
+            // Umbraco enforces uniqueness on UrlSegment, but not on a custom text field —
+            // the index mirrors that same underlying property, so the same caveat applies.
             if (matches.Count > 1)
             {
                 logger.Warning(
@@ -54,19 +84,17 @@ public sealed class ApiServcie(
                     wanted, matches.Count, pageContentTypeAlias, culture);
             }
 
-            var page = matches[0];
-            page.Cultures.TryGetValue(cultureKey, out var pageCultureInfo);
+            if (!int.TryParse(matches[0].Id, out var nodeId)) return null;
 
-            var componentsProperty = page.GetProperty(CmsConstants.Fields.Components);
+            var content = contentQuery.Content(nodeId);
 
-            return new PageDto
-            {
-                Id = page.Key.ToString(),
-                Slug = SlugOf(page, culture) ?? wanted,
-                Title = pageCultureInfo?.Name ?? page.Name ?? string.Empty,
-                Seo = seoMapper.Map(page, culture),
-                Components = componentMapper.MapComponents(componentsProperty, culture),
-            };
+            // Defends against the index briefly lagging the live published-content cache
+            // (e.g. a page was just unpublished) — the tree-walk this replaces never had
+            // this gap, since it read the live cache directly with no index in between.
+            if (content is null || !content.IsPublished(culture)) return null;
+
+            // Detail mode: everything, including detailPageComponents and SEO.
+            return pageMapper.Map(content, culture, PageMapMode.Detail);
         }
         catch (Exception ex)
         {
@@ -76,18 +104,5 @@ public sealed class ApiServcie(
                 pageContentTypeAlias, slug, culture);
             throw;
         }
-    }
-
-    private string? SlugOf(IPublishedContent content, string? culture) =>
-        Normalise(valueMapper.Text(content, CmsConstants.Fields.Slug, culture));
-
-    /// <summary>
-    /// Editors paste slugs with stray slashes and whitespace; normalise both sides so
-    /// "/about-us/" and "about-us" are the same page.
-    /// </summary>
-    private static string? Normalise(string? value)
-    {
-        var trimmed = value?.Trim().Trim('/').Trim();
-        return string.IsNullOrEmpty(trimmed) ? null : trimmed;
     }
 }

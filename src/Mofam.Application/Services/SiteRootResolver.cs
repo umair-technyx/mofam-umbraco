@@ -1,19 +1,19 @@
-using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Options;
 using Mofam.Application.Abstractions;
+using Mofam.Domain.Options;
 using Serilog;
 using Umbraco.Cms.Core;
 using Umbraco.Cms.Core.Models.PublishedContent;
-using Umbraco.Extensions;
 
 namespace Mofam.Application.Services;
 
 public sealed class SiteRootResolver(
     IPublishedContentQuery contentQuery,
-    IMemoryCache cache,
+    ICachePolicy cachePolicy,
+    IOptions<CacheOptions> cacheOptions,
     ILogger logger) : ISiteRootResolver
 {
     private const string CacheKeyPrefix = "mofam:site-root:";
-    private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(5);
 
     public IPublishedContent? GetRoot(string rootAlias)
     {
@@ -23,24 +23,24 @@ public sealed class SiteRootResolver(
 
         // Only the key is cached, never the IPublishedContent itself — published content
         // instances belong to a request-scoped snapshot and must not outlive it.
-        if (cache.TryGetValue(cacheKey, out Guid cachedKey))
-        {
-            var cached = contentQuery.Content(cachedKey);
-            if (cached is not null) return cached;
+        var rootKey = cachePolicy.GetOrCreate<Guid?>(
+            cacheKey,
+            cacheOptions.Value.SiteRoot,
+            () => FindRoot(rootAlias)?.Key);
 
-            // Node was moved, deleted or unpublished since we cached it.
-            cache.Remove(cacheKey);
-        }
-
-        var root = FindRoot(rootAlias);
-        if (root is null)
+        if (rootKey is null)
         {
             logger.Warning("No site root found for alias {RootAlias}", rootAlias);
             return null;
         }
 
-        cache.Set(cacheKey, root.Key, CacheDuration);
-        return root;
+        var root = contentQuery.Content(rootKey.Value);
+        if (root is not null) return root;
+
+        // Cached key no longer resolves — node moved, deleted or unpublished. Drop it
+        // and go back to the tree once.
+        cachePolicy.Remove(cacheKey);
+        return FindRoot(rootAlias);
     }
 
     // Channel roots normally sit one level under the content root, but tolerate them
