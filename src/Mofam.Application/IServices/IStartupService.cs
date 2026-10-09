@@ -2,10 +2,12 @@ using Mofam.Domain.Models.Dtos;
 
 namespace Mofam.Application.IServices;
 
-/// <summary>
-/// Builds the front end's first-load payload: header, footer, dictionary and culture.
-/// </summary>
+// Builds the data the front end needs on first load: header, footer, dictionary and culture.
 public interface IStartupService
 {
+    #region Startup
+
     Task<Startup?> GetStartupAsync(string? culture);
+
+    #endregion
 }

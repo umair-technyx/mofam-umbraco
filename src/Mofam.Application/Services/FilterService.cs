@@ -21,6 +21,8 @@ public sealed class FilterService(
 {
     private const string CacheKeyPrefix = "mofam:filters:";
 
+    #region Filters
+
     public FilterDataDto? GetFilterData(string contentType, string? culture)
     {
         using var tracer = new FunctionTracer(loginfile: true);
@@ -39,11 +41,14 @@ public sealed class FilterService(
         {
             return cachePolicy.GetOrCreate(cacheKey, cacheOptions.Value.Filters, () =>
             {
+                // Scan the content tree once for all option types, not once per filter group.
+                var nodesByType = PublishedItemsOfTypes(sources.Select(s => s.ItemContentTypeAlias), culture);
+
                 var filters = sources
                     .Select(source => new FilterGroupDto
                     {
                         Key = source.Key,
-                        Values = OptionsFor(source.ItemContentTypeAlias, culture),
+                        Values = OptionsFor(nodesByType.GetValueOrDefault(source.ItemContentTypeAlias) ?? [], culture),
                     })
                     .Where(group => group.Values.Count > 0)
                     .ToList();
@@ -62,20 +67,22 @@ public sealed class FilterService(
         }
     }
 
-    /// <summary>
-    /// Every published node of the option type, whether or not anything references it.
-    /// </summary>
-    private List<FilterValueDto> OptionsFor(string itemContentTypeAlias, string? culture)
+    #endregion
+
+    #region Options
+
+    // Every published node of the option type, even if nothing uses it.
+    private List<FilterValueDto> OptionsFor(List<IPublishedContent> nodes, string? culture)
     {
         var options = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var node in PublishedItemsOfType(itemContentTypeAlias, culture))
+        foreach (var node in nodes)
         {
             var label = valueMapper.Text(node, CmsConstants.Fields.Title, culture);
 
-            // No node-name fallback by design: an option with no title in the requested
-            // culture is untranslated, so it is skipped rather than shown in the wrong
-            // language. Skipping means the guard below is required, not optional.
+            // No fallback to the node name on purpose. An option with no title in this
+            // culture is not translated, so we skip it instead of showing the wrong language.
+            // Because of this, the check below is required.
             if (string.IsNullOrWhiteSpace(label)) continue;
 
             options.TryAdd(node.Key.ToString(), label);
@@ -87,13 +94,21 @@ public sealed class FilterService(
             .ToList();
     }
 
-    /// <summary>
-    /// Walks the published cache rather than Examine, so filters work independently of
-    /// index state. The result is cached.
-    /// </summary>
-    private List<IPublishedContent> PublishedItemsOfType(string contentTypeAlias, string? culture)
+    #endregion
+
+    #region Published content
+
+    // Walks the published cache instead of Examine, so filters do not depend on the index.
+    // Walks the tree once and groups the published nodes by content type alias.
+    private Dictionary<string, List<IPublishedContent>> PublishedItemsOfTypes(
+        IEnumerable<string> contentTypeAliases, string? culture)
     {
-        var results = new List<IPublishedContent>();
+        var results = new Dictionary<string, List<IPublishedContent>>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var alias in contentTypeAliases)
+        {
+            results[alias] = [];
+        }
 
         foreach (var root in contentQuery.ContentAtRoot())
         {
@@ -104,13 +119,12 @@ public sealed class FilterService(
 
         void Collect(IPublishedContent node)
         {
-            if (string.Equals(node.ContentType.Alias, contentTypeAlias, StringComparison.OrdinalIgnoreCase)
-                && node.IsPublished(culture))
+            if (results.TryGetValue(node.ContentType.Alias, out var matches) && node.IsPublished(culture))
             {
-                results.Add(node);
+                matches.Add(node);
             }
 
-            // NOTE: obsolete Children property — see SiteRootResolver for the Umbraco 18 migration note.
+            // Children is obsolete. See SiteRootResolver for the Umbraco 18 note.
 #pragma warning disable CS0618
             foreach (var child in node.Children)
 #pragma warning restore CS0618
@@ -119,4 +133,6 @@ public sealed class FilterService(
             }
         }
     }
+
+    #endregion
 }

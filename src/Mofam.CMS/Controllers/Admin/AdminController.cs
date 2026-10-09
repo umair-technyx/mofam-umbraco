@@ -5,7 +5,7 @@ using Mofam.Infrastructure.Filters;
 using Serilog;
 using Umbraco.Cms.Infrastructure.Persistence;
 
-namespace Mofam.CMS.Controllers;
+namespace Mofam.CMS.Controllers.Admin;
 
 [ApiController]
 [Route("api/admin")]

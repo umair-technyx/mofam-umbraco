@@ -4,11 +4,11 @@ using Umbraco.Cms.Core.Models.PublishedContent;
 
 namespace Mofam.Application.Mapping;
 
-/// <summary>
-/// Link -> LinkDto. Pure input/output with no services, so it is safe as a static class.
-/// </summary>
+// Converts a Umbraco Link to a LinkDto. It uses no services, so it can be a static class.
 public static class LinkMapper
 {
+    #region Map
+
     public static LinkDto? Map(Link? link)
     {
         if (link is null) return null;
@@ -33,11 +33,13 @@ public static class LinkMapper
             .ToList();
     }
 
-    /// <summary>
-    /// Returns the first link held by any property on the element, whichever alias it
-    /// uses — each navigation item type names its link property differently
-    /// (headerPrimaryNavigationItem, footerSecondaryNavigationItem, and so on).
-    /// </summary>
+    #endregion
+
+    #region Find link
+
+    // Returns the first link found on any property of the element.
+    // Each navigation item type has a different link property name,
+    // so we look at the value type instead of the name.
     public static LinkDto? FirstLinkOn(IPublishedElement element, string? culture)
     {
         foreach (var property in element.Properties)
@@ -55,4 +57,6 @@ public static class LinkMapper
 
         return null;
     }
+
+    #endregion
 }

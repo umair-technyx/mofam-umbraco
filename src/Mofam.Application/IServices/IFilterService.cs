@@ -2,12 +2,14 @@ using Mofam.Domain.Models.Dtos;
 
 namespace Mofam.Application.IServices;
 
-/// <summary>
-/// Builds the available filter options for a listing type, derived from published
-/// content so options with no matching items never appear.
-/// </summary>
+// Builds the filter options for a listing type from published content,
+// so an option with no matching items never appears.
 public interface IFilterService
 {
-    /// <summary>Returns null when the type has no configured filters.</summary>
+    #region Filters
+
+    // Returns null if the content type has no filters set up.
     FilterDataDto? GetFilterData(string contentType, string? culture);
+
+    #endregion
 }
