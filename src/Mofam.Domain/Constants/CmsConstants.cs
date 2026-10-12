@@ -37,6 +37,12 @@ public static class CmsConstants
     {
         public const string English = "en";
         public const string Arabic = "ar";
+
+        public static readonly string[] All = [English, Arabic];
+
+        // Returns the supported culture in its standard form ("EN" -> "en"), or null if unsupported.
+        public static string? Resolve(string? culture) =>
+            All.FirstOrDefault(c => string.Equals(c, culture, StringComparison.OrdinalIgnoreCase));
     }
 
     public static class Fields
@@ -118,14 +124,21 @@ public static class CmsConstants
         public const string Header = "header";
         public const string HeaderPrimaryLogo = "headerPrimaryLogo";
         public const string HeaderSecondaryLogo = "headerSecondaryLogo";
+        public const string HeaderLogoAltText = "headerLogoAltText";
+        public const string TopBarLabel = "topBarLabel";
+        public const string SearchBarLabel = "searchBarLabel";
+        public const string LearnMoreCta = "learnMoreCta";
+        public const string AccessibilityScript = "accessbilitiyScript"; 
 
         // Footer Content tab
         public const string Footer = "footer";
         public const string FooterPrimaryLogo = "footerPrimaryLogo";
         public const string FooterSecondaryLogo = "footerSecondaryLogo";
+        public const string FooterLogoAltText = "footerLogoAltText";
         public const string SocialLinks = "socialLinks";
-        public const string LabelFollowUs = "labelFollowUs";
+        public const string FollowUsLabel = "followUsLabel";
         public const string BottomText = "bottomText";
+        public const string LastUpdatedToken = "{lastUpdated}";
     }
 
     public static class Http

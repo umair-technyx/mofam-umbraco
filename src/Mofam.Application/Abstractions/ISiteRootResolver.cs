@@ -2,15 +2,14 @@ using Umbraco.Cms.Core.Models.PublishedContent;
 
 namespace Mofam.Application.Abstractions;
 
-/// <summary>
-/// Resolves a channel root node (web, app, …) by its content type alias.
-/// Roots change very rarely, so resolved keys are cached.
-/// </summary>
+// Finds a channel root node (web, app, etc) by its content type alias.
+// Roots rarely change, so the resolved keys are cached.
 public interface ISiteRootResolver
 {
-    /// <summary>
-    /// Returns the root node for <paramref name="rootAlias"/>, or null when it does not exist
-    /// or is unpublished.
-    /// </summary>
+    #region Root
+
+    // Returns the root node for the alias, or null if it does not exist or is unpublished.
     IPublishedContent? GetRoot(string rootAlias);
+
+    #endregion
 }

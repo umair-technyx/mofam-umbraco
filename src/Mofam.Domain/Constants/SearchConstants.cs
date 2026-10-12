@@ -1,56 +1,48 @@
 namespace Mofam.Domain.Constants;
 
-/// <summary>
-/// Search and filter wiring. These are tied to the content model, not the environment,
-/// so they live in code rather than appsettings — nothing here differs between dev,
-/// staging and production.
-/// </summary>
+// Search and filter settings. They depend on the content model, not the environment,
+// so they live in code and not in appsettings. Nothing here changes between
+// dev, staging and production.
 public static class SearchConstants
 {
-    /// <summary>
-    /// Umbraco's built-in index of published content only. Never contains drafts, which
-    /// is what makes it safe to expose publicly.
-    /// </summary>
+    #region Index
+
+    // Umbraco's built-in index that has only published content. It never has drafts,
+    // so it is safe to expose publicly.
     public const string IndexName = "ExternalIndex";
 
-    /// <summary>
-    /// Examine's built-in field holding a node's content type alias — set on every
-    /// indexed document regardless of doctype, so any lookup can filter on it directly.
-    /// </summary>
+    // Examine's built-in field with the content type alias of a node. It is set on every
+    // indexed document, so any lookup can filter on it directly.
     public const string NodeTypeAliasField = "__NodeTypeAlias";
 
-    /// <summary>
-    /// Examine's built-in published flag. Culture-variant content is flagged per culture
-    /// (<c>__Published_en</c>); invariant content uses the bare field — callers append the
-    /// culture suffix themselves when one applies.
-    /// </summary>
+    // Examine's built-in published flag. Content with cultures is flagged per culture
+    // (__Published_en). Content without cultures uses the field as it is.
+    // Callers add the culture suffix themselves when needed.
     public const string PublishedField = "__Published";
 
-    /// <summary>
-    /// Index fields a free-text term is matched against.
-    /// <para>
-    /// List the bare alias only. Umbraco indexes culture-variant properties with a
-    /// culture suffix (<c>title_en</c>) and invariant ones without, so the query expands
-    /// each name into both forms at query time.
-    /// </para>
-    /// </summary>
+    #endregion
+
+    #region Search
+
+    // Index fields that a free-text term is matched against.
+    // List only the plain alias. Umbraco indexes culture properties with a suffix
+    // (title_en) and others without, so the query adds both forms at query time.
     public static readonly string[] SearchableFields = ["title", "description"];
 
-    /// <summary>
-    /// Content types callers may search. Anything not listed is unreachable through the
-    /// API, so adding a type here is a deliberate act.
-    /// </summary>
+    // Content types that callers can search. Anything not listed cannot be reached
+    // through the API, so adding a type here is a deliberate choice.
     public static readonly string[] AllowedContentTypes =
     [
         CmsConstants.ContentTypes.Service,
     ];
 
-    /// <summary>
-    /// Filters exposed per content type. Options are every published node of
-    /// <see cref="FilterSource.ItemContentTypeAlias"/> in the CMS — not only the ones
-    /// currently assigned — so an editor can add a category and have it appear as a
-    /// filter before anything uses it.
-    /// </summary>
+    #endregion
+
+    #region Filters
+
+    // Filters shown for each content type. The options are every published node of
+    // FilterSource.ItemContentTypeAlias in the CMS, not only the ones already in use.
+    // So an editor can add a category and it shows as a filter before anything uses it.
     public static readonly IReadOnlyDictionary<string, FilterSource[]> FilterDefinitions =
         new Dictionary<string, FilterSource[]>(StringComparer.OrdinalIgnoreCase)
         {
@@ -60,16 +52,18 @@ public static class SearchConstants
             ],
         };
 
-    /// <summary>Filter options only change on publish, so they cache comfortably.</summary>
+    // Filter options only change on publish, so they can be cached.
     public static readonly TimeSpan FilterCacheDuration = TimeSpan.FromMinutes(5);
+
+    #endregion
 }
 
-/// <summary>
-/// One filter on a listing.
-/// </summary>
-/// <param name="Key">
-/// Property alias the client sends back to the search endpoint. This has to match the
-/// property being filtered on, not the container's name, or the round-trip won't match.
-/// </param>
-/// <param name="ItemContentTypeAlias">Content type supplying the available options.</param>
+#region Filter source
+
+// One filter on a listing.
+// Key: property alias the client sends back to the search endpoint. It must match the
+// property being filtered on, not the container name, or the values will not match.
+// ItemContentTypeAlias: content type that supplies the available options.
 public sealed record FilterSource(string Key, string ItemContentTypeAlias);
+
+#endregion

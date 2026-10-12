@@ -1,34 +1,40 @@
 namespace Mofam.Domain.Models.Dtos;
 
-/// <summary>
-/// Everything the front end needs on first load: chrome (header/footer), translations
-/// and the resolved culture — in one call rather than four.
-/// </summary>
+#region Startup
+
+// Everything the front end needs on first load: header, footer, translations
+// and culture, in one call instead of four.
 public sealed record Startup
 {
     public string? Culture { get; init; }
     public required HeaderDto Header { get; init; }
     public required FooterDto Footer { get; init; }
 
-    /// <summary>Dictionary key to translated value for the requested culture.</summary>
+    // Dictionary key and its translated value for the requested culture.
     public IReadOnlyDictionary<string, string> Dictionary { get; init; } =
         new Dictionary<string, string>();
 
-    /// <summary>
-    /// Content type aliases the detail endpoint accepts —
-    /// <c>GET /api/web/{culture}/{contentType}/{slug}</c> — so the front end knows which
-    /// values are valid without hard-coding them on its side. Same list
-    /// <c>ComponentMapper</c> uses to decide a picked page from a reusable component
-    /// (<see cref="Mofam.Domain.Constants.CmsConstants.ContentTypes.PageTypes"/>): one
-    /// source of truth, so a new page type can't go stale on one side of the API.
-    /// </summary>
+    // Content type aliases the detail endpoint accepts:
+    // GET /api/web/{culture}/{contentType}/{slug}
+    // The front end can use this list instead of hard-coding the values.
+    // It is the same list ComponentMapper uses (CmsConstants.ContentTypes.PageTypes),
+    // so a new page type is added in one place only.
     public IReadOnlyList<string> ContentTypes { get; init; } = [];
 }
+
+#endregion
+
+#region Header and Footer
 
 public sealed record HeaderDto
 {
     public MediaDto? PrimaryLogo { get; init; }
     public MediaDto? SecondaryLogo { get; init; }
+    public string? LogoAltText { get; init; }
+    public string? TopBarLabel { get; init; }
+    public string? SearchBarLabel { get; init; }
+    public LinkDto? LearnMoreCta { get; init; }
+    public string? AccessibilityScript { get; init; }
     public IReadOnlyList<NavigationItemDto> Navigation { get; init; } = [];
 }
 
@@ -36,11 +42,16 @@ public sealed record FooterDto
 {
     public MediaDto? PrimaryLogo { get; init; }
     public MediaDto? SecondaryLogo { get; init; }
+    public string? LogoAltText { get; init; }
     public IReadOnlyList<NavigationItemDto> Navigation { get; init; } = [];
     public IReadOnlyList<LinkDto> SocialLinks { get; init; } = [];
     public string? FollowUsLabel { get; init; }
     public string? BottomText { get; init; }
 }
+
+#endregion
+
+#region Navigation
 
 public sealed record NavigationItemDto
 {
@@ -48,3 +59,5 @@ public sealed record NavigationItemDto
     public LinkDto? Link { get; init; }
     public IReadOnlyList<NavigationItemDto> Children { get; init; } = [];
 }
+
+#endregion
