@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Extensions.Options;
 using Mofam.Application.Abstractions;
 using Mofam.Application.Helpers;
@@ -19,7 +20,7 @@ public sealed class FilterService(
     IOptions<CacheOptions> cacheOptions,
     ILogger logger) : IFilterService
 {
-    private const string CacheKeyPrefix = "mofam:filters:";
+    public const string CacheKeyPrefix = "mofam:filters:";
 
     #region Filters
 
@@ -35,7 +36,8 @@ public sealed class FilterService(
             return null;
         }
 
-        var cacheKey = $"{CacheKeyPrefix}{contentType}:{culture}";
+        // Lower case, so "Service" and "service" share one cache entry.
+        var cacheKey = $"{CacheKeyPrefix}{contentType.ToLowerInvariant()}:{culture}";
 
         try
         {
@@ -89,9 +91,22 @@ public sealed class FilterService(
         }
 
         return options
-            .OrderBy(o => o.Value, StringComparer.CurrentCultureIgnoreCase)
+            .OrderBy(o => o.Value, SortComparer(culture))
             .Select(o => new FilterValueDto { Key = o.Key, Value = o.Value })
             .ToList();
+    }
+
+    // Sorts by the rules of the requested culture (for example Arabic), not the server's language.
+    private static StringComparer SortComparer(string? culture)
+    {
+        try
+        {
+            return StringComparer.Create(CultureInfo.GetCultureInfo(culture ?? string.Empty), ignoreCase: true);
+        }
+        catch (CultureNotFoundException)
+        {
+            return StringComparer.InvariantCultureIgnoreCase;
+        }
     }
 
     #endregion

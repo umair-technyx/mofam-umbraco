@@ -36,6 +36,10 @@ public static class SearchConstants
         CmsConstants.ContentTypes.Service,
     ];
 
+    // Allowed page size for a search. A value outside this range is moved into it.
+    public const int MinPageSize = 1;
+    public const int MaxPageSize = 500;
+
     #endregion
 
     #region Filters

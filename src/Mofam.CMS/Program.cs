@@ -1,5 +1,11 @@
 using System.Text.Json;
 using System.Threading.RateLimiting;
+using Azure.Core;
+using Azure.Identity;
+using Azure.Extensions.AspNetCore.Configuration.Secrets;
+using Azure.Storage.Blobs;
+using Umbraco.Cms.Core.DependencyInjection;
+using Umbraco.StorageProviders.AzureBlob.IO;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ApplicationModels;
 using Microsoft.AspNetCore.RateLimiting;
@@ -15,6 +21,27 @@ using Mofam.Infrastructure.Services;
 const string CorsPolicyName = "ConfiguredOrigins";
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
+
+if (!builder.Environment.IsDevelopment())
+{
+    var keyVaultSection = builder.Configuration.GetSection("KeyVault");
+
+    if (Uri.TryCreate(keyVaultSection["URL"], UriKind.Absolute, out var keyVaultUri))
+    {
+        var tenantId = keyVaultSection["TenantId"];
+        var clientId = keyVaultSection["ClientId"];
+        var clientSecret = keyVaultSection["ClientSecret"];
+
+        TokenCredential credential =
+            !string.IsNullOrWhiteSpace(tenantId)
+            && !string.IsNullOrWhiteSpace(clientId)
+            && !string.IsNullOrWhiteSpace(clientSecret)
+                ? new ClientSecretCredential(tenantId, clientId, clientSecret)
+                : new DefaultAzureCredential();
+
+        builder.Configuration.AddAzureKeyVault(keyVaultUri, credential);
+    }
+}
 
 builder.AddCentralizedLogging();
 
@@ -86,9 +113,22 @@ builder.Services.AddResponseCompression(options =>
     options.Providers.Add<GzipCompressionProvider>();
 });
 
-builder.CreateUmbracoBuilder()
+var umbracoBuilder = builder.CreateUmbracoBuilder()
     .AddBackOffice()
-    .AddWebsite()
+    .AddWebsite();
+
+var blobSection = builder.Configuration.GetSection("Umbraco:Storage:AzureBlob:Media");
+
+if (!string.IsNullOrWhiteSpace(blobSection["ConnectionString"]))
+{
+    umbracoBuilder.AddAzureBlobMediaFileSystem(options =>
+        options.TryCreateBlobContainerClientUsingUri(accountUri =>
+            new BlobContainerClient(
+                new Uri($"{accountUri.GetLeftPart(UriPartial.Authority)}/{options.ContainerName}"),
+                new DefaultAzureCredential())));
+}
+
+umbracoBuilder
     .AddComposers()
     .Build();
 
