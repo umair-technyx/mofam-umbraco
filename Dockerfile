@@ -8,10 +8,8 @@ FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 COPY . /source
 WORKDIR /source/src/Mofam.CMS
 
-ARG TARGETARCH
-
 RUN --mount=type=cache,id=nuget,target=/root/.nuget/packages \
-    dotnet publish -a ${TARGETARCH/amd64/x64} --use-current-runtime --self-contained false -o /app
+    dotnet publish -c Release --self-contained false -o /app
 
 ################################################################################
 # Runtime stage
