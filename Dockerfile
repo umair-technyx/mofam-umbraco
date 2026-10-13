@@ -3,7 +3,7 @@
 ################################################################################
 # Build stage
 ################################################################################
-FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0-alpine AS build
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 
 COPY . /source
 WORKDIR /source/src/Mofam.CMS
@@ -16,13 +16,8 @@ RUN --mount=type=cache,id=nuget,target=/root/.nuget/packages \
 ################################################################################
 # Runtime stage
 ################################################################################
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine AS final
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
-
-# ICU and time zone data, and turn off invariant globalization mode.
-# Fixes: "Globalization Invariant Mode is not supported" / "en-US is an invalid culture identifier"
-RUN apk add --no-cache icu-libs icu-data-full tzdata
-ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false
 
 COPY --from=build /app .
 
