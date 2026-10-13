@@ -1,13 +1,14 @@
 trigger:
-- develop
- 
+  branches:
+    include:
+    - development
+  
 pool:
   vmImage: ubuntu-latest
- 
+
 variables:
-- group: Digital-eye-aks
-- name: deploymentFile
-  value: 'K8s/UAT/deployment.yaml'
+- group: MOFAM
+  
 stages:
 - stage: Build
   displayName: Build + Push + Prepare Artifact
@@ -16,7 +17,7 @@ stages:
     displayName: Build job
     steps:
     - checkout: self
- 
+
     - bash: |
         set -e
         COMMIT_SHA="$(Build.SourceVersion)"
@@ -25,7 +26,7 @@ stages:
         echo "$SHORT_SHA" > "$(Build.ArtifactStagingDirectory)/tag.txt"
         echo "SHORT_SHA=$SHORT_SHA"
       displayName: "Compute tag + save tag.txt"
- 
+
     - task: AzureCLI@2
       displayName: "Build & Push to ACR"
       inputs:
@@ -35,74 +36,6 @@ stages:
         inlineScript: |
           set -e
           az acr login --name $(acrName)
-          IMAGE="$(acrLoginServer)/$(polyUiRepo):$(SHORT_SHA)"
-          docker build -t "$IMAGE" -f .
+          IMAGE="$(acrLoginServer)/$(MofamBeRepo):$(SHORT_SHA)"
+          docker build -t "$IMAGE" .
           docker push "$IMAGE"
- 
-    # Prepare deployable manifests in artifact staging (do NOT modify repo checkout)
-    - bash: |
-        set -e
-        mkdir -p "$(Build.ArtifactStagingDirectory)/manifests"
-        cp -r K8s/* "$(Build.ArtifactStagingDirectory)/manifests/"
- 
-        REL_PATH="$(echo '$(deploymentFile)' | sed 's|^K8s/||')"
-        ARTIFACT_DEPLOYMENT_FILE="$(Build.ArtifactStagingDirectory)/manifests/$REL_PATH"
- 
-        echo "Repo deploymentFile: $(deploymentFile)"
-        echo "REL_PATH: $REL_PATH"
-        echo "Artifact deployment file: $ARTIFACT_DEPLOYMENT_FILE"
- 
-        sed -i "s|$(acrLoginServer)/$(polyUiRepo):latest|$(acrLoginServer)/$(polyUiRepo):$(SHORT_SHA)|g" \
-          "$ARTIFACT_DEPLOYMENT_FILE"
- 
-        echo "Updated manifest:"
-        cat "$ARTIFACT_DEPLOYMENT_FILE"
-        echo "Manifest prepared with tag $(SHORT_SHA):"
-      displayName: "Prepare manifests with new tag"
- 
-    - task: PublishPipelineArtifact@1
-      displayName: "Publish deploy artifact"
-      inputs:
-        targetPath: '$(Build.ArtifactStagingDirectory)'
-        artifact: 'drop'
- 
-# =========================================================
-# STAGE 2: DEPLOY
-# =========================================================
- 
-- stage: Deploy
-  displayName: Deploy from Artifact
-  dependsOn: Build
-  jobs:
-  - deployment: deploy
-    displayName: Deploy job
-    environment: "tf-demo"
-    strategy:
-      runOnce:
-        deploy:
-          steps:
-          - download: current
-            artifact: drop
- 
-          - task: AzureCLI@2
-            displayName: "Get AKS credentials"
-            inputs:
-              azureSubscription: $(azureServiceConnection)
-              scriptType: bash
-              scriptLocation: inlineScript
-              inlineScript: |
-                set -e
-                az aks get-credentials -g $(aksResourceGroup) -n $(aksClusterName) --overwrite-existing
- 
-          - bash: |
-              set -e
-              TAG="$(cat $(Pipeline.Workspace)/drop/tag.txt)"
-              echo "Deploying tag: $TAG"
- 
-              REL_PATH="$(echo "$(deploymentFile)" | sed 's|^K8s/||')"
-              MANIFEST_FILE="$(Pipeline.Workspace)/drop/manifests/$REL_PATH"
- 
-              echo "Applying: $MANIFEST_FILE"
-              kubectl apply -f "$MANIFEST_FILE"
-              kubectl rollout status deployment/poly-frontend -n polyx --timeout=5m
-            displayName: "Apply + Rollout"
