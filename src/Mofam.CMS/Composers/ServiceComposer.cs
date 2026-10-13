@@ -20,7 +20,10 @@ public sealed class ServiceComposer : IComposer
         builder.Services.AddScoped<IStartupService, StartupService>();
         builder.Services.AddScoped<IComponentMapper, ComponentMapper>();
         builder.Services.AddScoped<IPropertyValueMapper, PropertyValueMapper>();
-        builder.Services.AddScoped<ICachePolicy, CachePolicy>();        builder.Services.AddScoped<ISeoMapper, SeoMapper>();
+        builder.Services.AddScoped<ICachePolicy, CachePolicy>();
+
+        // Singleton: one shared token for all cached pages (cleared on publish).
+        builder.Services.AddSingleton<PageCacheToken>();        builder.Services.AddScoped<ISeoMapper, SeoMapper>();
         builder.Services.AddScoped<IPageMapper, PageMapper>();
         builder.Services.AddScoped<ISiteRootResolver, SiteRootResolver>();
         builder.Services.AddScoped<IMediaUrlBuilder, MediaUrlBuilder>();
@@ -34,8 +37,8 @@ public sealed class ServiceComposer : IComposer
         // Normalises the slug and blocks duplicates before content is saved.
         builder.AddNotificationHandler<ContentSavingNotification, SlugNotificationHandler>();
 
-        // Clears the cached startup response when content is published, so the footer date is fresh.
-        builder.AddNotificationHandler<ContentCacheRefresherNotification, StartupCacheNotificationHandler>();
+        // Clears the startup and filter caches when content changes, so the CMS changes show at once.
+        builder.AddNotificationHandler<ContentCacheRefresherNotification, ContentCacheNotificationHandler>();
 
         builder.Services.Configure<SecurityOptions>(
             builder.Config.GetSection(SecurityOptions.SectionName));

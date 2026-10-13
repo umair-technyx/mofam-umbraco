@@ -1,7 +1,9 @@
 using Mofam.Application.Abstractions;
+using Mofam.Application.Helpers;
 using Mofam.Domain.Models.Dtos;
 using Umbraco.Cms.Core.Models;
 using Umbraco.Cms.Core.Models.PublishedContent;
+using Umbraco.Cms.Core.PropertyEditors.ValueConverters;
 using Umbraco.Cms.Core.Strings;
 
 namespace Mofam.Application.Mapping;
@@ -16,8 +18,18 @@ public sealed class PropertyValueMapper(IMediaUrlBuilder mediaUrlBuilder) : IPro
                 mapped = null;
                 return true;
 
-            case string or bool or int or long or double or decimal or Guid or DateTime or DateTimeOffset:
+            // Text. If an editor pasted SVG code into a text field, it is cleaned to one tidy line.
+            case string text:
+                mapped = SvgCleaner.Clean(text);
+                return true;
+
+            case bool or int or long or double or decimal or Guid or DateTime or DateTimeOffset:
                 mapped = value;
+                return true;
+
+            // Color picker: send the colour as a CSS value, for example "#FEEAC2".
+            case ColorPickerValueConverter.PickedColor pickedColor:
+                mapped = ToCssColor(pickedColor.Color);
                 return true;
 
             // Rich text: emit the HTML rather than the wrapper type.
@@ -55,6 +67,18 @@ public sealed class PropertyValueMapper(IMediaUrlBuilder mediaUrlBuilder) : IPro
         }
     }
 
+   
+    private static string? ToCssColor(string? color)
+    {
+        if (string.IsNullOrWhiteSpace(color)) return null;
+
+        color = color.Trim();
+
+        return !color.StartsWith('#') && color.All(Uri.IsHexDigit) && color.Length is 3 or 4 or 6 or 8
+            ? "#" + color
+            : color;
+    }
+
     public object? Raw(IPublishedElement element, string alias, string? culture)
     {
         var property = element.GetProperty(alias);
@@ -83,5 +107,13 @@ public sealed class PropertyValueMapper(IMediaUrlBuilder mediaUrlBuilder) : IPro
             IEnumerable<Link> many => LinkMapper.MapMany(many),
             Link one => LinkMapper.Map(one) is { } dto ? [dto] : [],
             _ => [],
+        };
+
+    public string? Color(IPublishedElement element, string alias, string? culture) =>
+        Raw(element, alias, culture) switch
+        {
+            ColorPickerValueConverter.PickedColor picked => ToCssColor(picked.Color),
+            string text => ToCssColor(text),
+            _ => null,
         };
 }

@@ -21,30 +21,33 @@ public sealed class ApiServcie(
     IPageMapper pageMapper,
     IShortStringHelper shortStringHelper,
     ICachePolicy cachePolicy,
+    PageCacheToken pageCacheToken,
     IOptions<CacheOptions> cacheOptions,
     ILogger logger) : IApiService
 {
     private const string CacheKeyPrefix = "mofam:page:";
 
+    #region Get page
+
     public PageDto? GetPageBySlug(string contentTypeAlias, string slug, string? culture)
     {
-        var cacheKey = $"{CacheKeyPrefix}{contentTypeAlias}:{culture}:{CommonHelper.NormaliseSlug(slug, shortStringHelper)}";
+        // Lower case, so "Page" and "page" (or "EN" and "en") share one cache entry.
+        var cacheKey = $"{CacheKeyPrefix}{contentTypeAlias.ToLowerInvariant()}:{culture?.ToLowerInvariant()}:{CommonHelper.NormaliseSlug(slug, shortStringHelper)}";
 
+        // The page cache is linked to a shared token, so a publish in the CMS clears all pages at once.
         return cachePolicy.GetOrCreate(
             cacheKey,
             cacheOptions.Value.Page,
-            () => BuildPage(contentTypeAlias, slug, culture));
+            () => BuildPage(contentTypeAlias, slug, culture),
+            pageCacheToken.Token);
     }
 
-    /// <summary>
-    /// Resolves a page by content type + slug through the Examine index, the same way
-    /// <see cref="SiteSearchService"/> resolves listing/search hits — one lookup mechanism
-    /// for the whole API, rather than this endpoint alone walking the content tree from a
-    /// hardcoded channel root. That tree-walk assumed every node of a given type lives
-    /// directly under one specific container, which breaks the moment an editor reparents
-    /// a node (or restructures the tree) — an assumption Examine's index doesn't need,
-    /// since it just matches content type + slug wherever the node actually lives.
-    /// </summary>
+    #endregion
+
+    #region Build page
+
+    // Finds a page by content type and slug using the Examine index, the same way the search does.
+    // The index finds the node wherever it is in the tree, so moving a node in the CMS does not break this.
     private PageDto? BuildPage(string pageContentTypeAlias, string slug, string? culture)
     {
         using var tracer = new FunctionTracer(loginfile: true);
@@ -75,8 +78,7 @@ public sealed class ApiServcie(
 
             if (matches.Count == 0) return null;
 
-            // Umbraco enforces uniqueness on UrlSegment, but not on a custom text field —
-            // the index mirrors that same underlying property, so the same caveat applies.
+            // Umbraco does not check that a custom slug field is unique, so two nodes can share a slug.
             if (matches.Count > 1)
             {
                 logger.Warning(
@@ -88,9 +90,8 @@ public sealed class ApiServcie(
 
             var content = contentQuery.Content(nodeId);
 
-            // Defends against the index briefly lagging the live published-content cache
-            // (e.g. a page was just unpublished) — the tree-walk this replaces never had
-            // this gap, since it read the live cache directly with no index in between.
+            // The index can be a little behind the published cache (for example, a page was just
+            // unpublished), so check the node is still published.
             if (content is null || !content.IsPublished(culture)) return null;
 
             // Detail mode: everything, including detailPageComponents and SEO.
@@ -105,4 +106,6 @@ public sealed class ApiServcie(
             throw;
         }
     }
+
+    #endregion
 }

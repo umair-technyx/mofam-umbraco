@@ -11,11 +11,20 @@
     <PackageVersion Include="Umbraco.Cms.DevelopmentMode.Backoffice" Version="17.7.1" />
     <PackageVersion Include="Microsoft.ICU.ICU4C.Runtime" Version="$(UmbracoAppLocalIcuVersion)" />
 
+    <!-- Azure Key Vault -->
+    <PackageVersion Include="Azure.Identity" Version="1.21.0" />
+    <PackageVersion Include="Azure.Extensions.AspNetCore.Configuration.Secrets" Version="1.5.2" />
+
+    <!-- Media in Azure Blob Storage -->
+    <PackageVersion Include="Umbraco.StorageProviders.AzureBlob" Version="17.1.0" />
+
     <!-- Logging -->
     <PackageVersion Include="Serilog.AspNetCore" Version="9.0.0" />
     <PackageVersion Include="Serilog.Enrichers.Environment" Version="3.0.1" />
     <PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1" />
     <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />
+    <PackageVersion Include="Serilog.Sinks.Map" Version="2.0.0" />
+    <PackageVersion Include="Serilog.Sinks.AzureBlobStorage" Version="4.0.5" />
     <PackageVersion Include="Sentry.Serilog" Version="6.9.0" />
   </ItemGroup>
 </Project>

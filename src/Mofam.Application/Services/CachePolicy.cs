@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Primitives;
 using Mofam.Application.Abstractions;
 using Mofam.Domain.Options;
 
@@ -7,7 +8,7 @@ namespace Mofam.Application.Services;
 
 public sealed class CachePolicy(IMemoryCache cache, IOptions<CacheOptions> options) : ICachePolicy
 {
-    public T? GetOrCreate<T>(string key, TimeSpan duration, Func<T?> factory)
+    public T? GetOrCreate<T>(string key, TimeSpan duration, Func<T?> factory, CancellationToken expireWith = default)
     {
         if (!ShouldCache(duration)) return factory();
 
@@ -17,7 +18,17 @@ public sealed class CachePolicy(IMemoryCache cache, IOptions<CacheOptions> optio
 
         // Misses are not cached: a 404 is usually transient (unpublished, wrong culture)
         // and caching it would keep serving the miss after the content appears.
-        if (value is not null) cache.Set(key, value, duration);
+        if (value is not null)
+        {
+            var entryOptions = new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = duration };
+
+            if (expireWith.CanBeCanceled)
+            {
+                entryOptions.AddExpirationToken(new CancellationChangeToken(expireWith));
+            }
+
+            cache.Set(key, value, entryOptions);
+        }
 
         return value;
     }

@@ -21,7 +21,13 @@ public sealed class SiteSearchService(
     public SearchResultsDto Search(SearchRequest request)
     {
         var pageNumber = Math.Max(1, request.PageNumber);
-        var pageSize = request.PageSize;
+        var pageSize = Math.Clamp(request.PageSize, SearchConstants.MinPageSize, SearchConstants.MaxPageSize);
+
+        var skipLong = (long)(pageNumber - 1) * pageSize;
+        if (skipLong > int.MaxValue)
+        {
+            return SearchResultsDto.Empty(pageNumber, pageSize);
+        }
 
         if (!examineManager.TryGetIndex(SearchConstants.IndexName, out var index))
         {
@@ -41,7 +47,7 @@ public sealed class SiteSearchService(
             var query = BuildQuery(index.Searcher, request, contentTypes);
 
             // Paging happens in Lucene, not in memory — the whole point of using the index.
-            var skip = (pageNumber - 1) * pageSize;
+            var skip = (int)skipLong;
             var results = query.Execute(new QueryOptions(skip, pageSize));
 
             var total = results.TotalItemCount;

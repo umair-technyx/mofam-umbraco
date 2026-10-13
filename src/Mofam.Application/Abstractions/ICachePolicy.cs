@@ -6,7 +6,9 @@ public interface ICachePolicy
 {
     #region Get or create
 
-    T? GetOrCreate<T>(string key, TimeSpan duration, Func<T?> factory);
+    // If expireWith is given, the entry also expires as soon as that token is cancelled.
+    // Pass the token before running the factory, so a reset during the build is not missed.
+    T? GetOrCreate<T>(string key, TimeSpan duration, Func<T?> factory, CancellationToken expireWith = default);
 
     Task<T?> GetOrCreateAsync<T>(string key, TimeSpan duration, Func<Task<T?>> factory);
 

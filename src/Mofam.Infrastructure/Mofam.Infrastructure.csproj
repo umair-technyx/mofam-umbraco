@@ -19,6 +19,9 @@
     <PackageReference Include="Serilog.Enrichers.Environment" />
     <PackageReference Include="Serilog.Sinks.Console" />
     <PackageReference Include="Serilog.Sinks.File" />
+    <PackageReference Include="Serilog.Sinks.Map" />
+    <PackageReference Include="Serilog.Sinks.AzureBlobStorage" />
+    <PackageReference Include="Azure.Identity" />
     <PackageReference Include="Sentry.Serilog" />
     <PackageReference Include="Umbraco.Cms.Infrastructure" />
   </ItemGroup>

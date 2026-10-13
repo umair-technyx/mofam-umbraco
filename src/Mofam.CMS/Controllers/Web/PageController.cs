@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Mofam.Application.IServices;
+using Mofam.Domain.Constants;
 using Mofam.Domain.Models.Common;
 using Mofam.Domain.Models.Dtos;
 using Mofam.Infrastructure.Filters;
@@ -18,7 +19,14 @@ public sealed class PageController(IApiService apiService) : ControllerBase
     [HttpGet("{culture}/{contentType}/{slug}")]
     public ActionResult<ApiResponse<PageDto>> GetPageData(string culture, string contentType, string slug)
     {
-        var page = apiService.GetPageBySlug(contentType, slug, culture);
+        // Unknown cultures never reach the cache, and "EN" / "en" share one entry.
+        var supported = CmsConstants.Cultures.Resolve(culture);
+        if (supported is null)
+        {
+            return NotFound(ApiResponse<PageDto>.NotFound("Culture not supported."));
+        }
+
+        var page = apiService.GetPageBySlug(contentType, slug, supported);
 
         return page is null
             ? NotFound(ApiResponse<PageDto>.NotFound("Page not found."))

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Mofam.Application.IServices;
+using Mofam.Domain.Constants;
 using Mofam.Domain.Models.Common;
 using Mofam.Domain.Models.Dtos;
 using Mofam.Domain.Models.Requests;
@@ -21,6 +22,18 @@ public sealed class SearchController(ISiteSearchService searchService) : Control
         if (request is null)
         {
             return BadRequest(ApiResponse<SearchResultsDto>.BadRequest("A search request body is required."));
+        }
+
+        // An unknown culture is rejected, and "EN" / "en" become the same value. No culture means invariant search.
+        if (!string.IsNullOrWhiteSpace(request.Culture))
+        {
+            var supported = CmsConstants.Cultures.Resolve(request.Culture.Trim());
+            if (supported is null)
+            {
+                return BadRequest(ApiResponse<SearchResultsDto>.BadRequest("Culture not supported."));
+            }
+
+            request = request with { Culture = supported };
         }
 
         var results = searchService.Search(request);
