@@ -25,6 +25,54 @@ stages:
     steps:
     - checkout: self
 
+    - pwsh: |
+        $webhookUrl = "$(teamsWebhookUrl)"
+        $projectName = "DEV - Backend"
+        $buildNumber = "$(Build.BuildNumber)"
+        $triggeredBy = "$(Build.RequestedFor)"
+
+        $payload = @{
+          type = "message"
+          attachments = @(
+            @{
+              contentType = "application/vnd.microsoft.card.adaptive"
+              content = @{
+                '$schema' = "http://adaptivecards.io/schemas/adaptive-card.json"
+                type = "AdaptiveCard"
+                version = "1.4"
+                body = @(
+                  @{
+                    type = "TextBlock"
+                    text = "Azure Release Started"
+                    size = "Large"
+                    weight = "Bolder"
+                    color = "Accent"
+                  },
+                  @{
+                    type = "TextBlock"
+                    text = "Deployment is in progress. You will receive an update when it completes."
+                    isSubtle = $true
+                    spacing = "None"
+                  },
+                  @{
+                    type = "FactSet"
+                    spacing = "Medium"
+                    facts = @(
+                      @{ title = "Project"; value = $projectName },
+                      @{ title = "Release"; value = "Release-$buildNumber" },
+                      @{ title = "Triggered By"; value = $triggeredBy },
+                      @{ title = "Build"; value = $buildNumber }
+                    )
+                  }
+                )
+              }
+            }
+          )
+        } | ConvertTo-Json -Depth 10
+
+        Invoke-RestMethod -Uri $webhookUrl -Method Post -Body $payload -ContentType 'application/json'
+      displayName: "Teams Notification - Started"
+
     - bash: |
         set -e
         COMMIT_SHA="$(Build.SourceVersion)"
@@ -75,24 +123,12 @@ stages:
         targetPath: '$(Build.ArtifactStagingDirectory)'
         artifact: 'drop'
 
-# =========================================================
-# STAGE 2: DEPLOY TO AKS
-# =========================================================
-- stage: Deploy
-  displayName: Deploy to AKS
-  dependsOn: Build
-  jobs:
-  - job: deploy
-    displayName: Deploy job
-    steps:
-    - download: current
-      artifact: drop
-
     - pwsh: |
         $webhookUrl = "$(teamsWebhookUrl)"
         $projectName = "DEV - Backend"
         $buildNumber = "$(Build.BuildNumber)"
         $triggeredBy = "$(Build.RequestedFor)"
+        $logsUrl = "$(System.TeamFoundationCollectionUri)$(System.TeamProject)/_build/results?buildId=$(Build.BuildId)"
 
         $payload = @{
           type = "message"
@@ -106,14 +142,14 @@ stages:
                 body = @(
                   @{
                     type = "TextBlock"
-                    text = "Azure Release Started"
+                    text = "Azure Release Failed"
                     size = "Large"
                     weight = "Bolder"
-                    color = "Accent"
+                    color = "Attention"
                   },
                   @{
                     type = "TextBlock"
-                    text = "Deployment is in progress. You will receive an update when it completes."
+                    text = "Build or push to ACR has failed. Please check the pipeline logs."
                     isSubtle = $true
                     spacing = "None"
                   },
@@ -123,9 +159,16 @@ stages:
                     facts = @(
                       @{ title = "Project"; value = $projectName },
                       @{ title = "Release"; value = "Release-$buildNumber" },
-                      @{ title = "Triggered By"; value = $triggeredBy },
-                      @{ title = "Build"; value = $buildNumber }
+                      @{ title = "Build"; value = $buildNumber },
+                      @{ title = "Triggered By"; value = $triggeredBy }
                     )
+                  }
+                )
+                actions = @(
+                  @{
+                    type = "Action.OpenUrl"
+                    title = "View Pipeline Logs"
+                    url = $logsUrl
                   }
                 )
               }
@@ -134,7 +177,21 @@ stages:
         } | ConvertTo-Json -Depth 10
 
         Invoke-RestMethod -Uri $webhookUrl -Method Post -Body $payload -ContentType 'application/json'
-      displayName: "Teams Notification - Started"
+      displayName: "Teams Notification - Build Failure"
+      condition: failed()
+
+# =========================================================
+# STAGE 2: DEPLOY TO AKS
+# =========================================================
+- stage: Deploy
+  displayName: Deploy to AKS
+  dependsOn: Build
+  jobs:
+  - job: deploy
+    displayName: Deploy job
+    steps:
+    - download: current
+      artifact: drop
 
     - task: AzureCLI@2
       displayName: "Get AKS credentials"
