@@ -10,6 +10,8 @@ variables:
 - group: MOFAM
 - name: deploymentFile
   value: 'k8s/deployment.yml'
+- name: teamsWebhookUrl
+  value: 'https://defaultcfd450af133b4864806c70f880e605.c1.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/12/workflows/f0de55cb656943eb88c7f286ab4921e3/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=IfeUhxg_31KLF1SEEz_HRIFrB_8W8-dcvRR4b6UsSZs'
   
 stages:
 # =========================================================
@@ -86,6 +88,54 @@ stages:
     - download: current
       artifact: drop
 
+    - pwsh: |
+        $webhookUrl = "$(teamsWebhookUrl)"
+        $projectName = "DEV - Backend"
+        $buildNumber = "$(Build.BuildNumber)"
+        $triggeredBy = "$(Build.RequestedFor)"
+
+        $payload = @{
+          type = "message"
+          attachments = @(
+            @{
+              contentType = "application/vnd.microsoft.card.adaptive"
+              content = @{
+                '$schema' = "http://adaptivecards.io/schemas/adaptive-card.json"
+                type = "AdaptiveCard"
+                version = "1.4"
+                body = @(
+                  @{
+                    type = "TextBlock"
+                    text = "Azure Release Started"
+                    size = "Large"
+                    weight = "Bolder"
+                    color = "Accent"
+                  },
+                  @{
+                    type = "TextBlock"
+                    text = "Deployment is in progress. You will receive an update when it completes."
+                    isSubtle = $true
+                    spacing = "None"
+                  },
+                  @{
+                    type = "FactSet"
+                    spacing = "Medium"
+                    facts = @(
+                      @{ title = "Project"; value = $projectName },
+                      @{ title = "Release"; value = "Release-$buildNumber" },
+                      @{ title = "Triggered By"; value = $triggeredBy },
+                      @{ title = "Build"; value = $buildNumber }
+                    )
+                  }
+                )
+              }
+            }
+          )
+        } | ConvertTo-Json -Depth 10
+
+        Invoke-RestMethod -Uri $webhookUrl -Method Post -Body $payload -ContentType 'application/json'
+      displayName: "Teams Notification - Started"
+
     - task: AzureCLI@2
       displayName: "Get AKS credentials"
       inputs:
@@ -107,3 +157,142 @@ stages:
         # Wait for the mofam-cms deployment rollout in the mofam namespace
         kubectl rollout status deployment/mofam-cms -n mofam --timeout=5m
       displayName: "Apply Manifests + Rollout"
+
+    - pwsh: |
+        $webhookUrl = "$(teamsWebhookUrl)"
+        $websiteUrl = "https://mofam-be.projectstagingserver.com/"
+        $projectName = "DEV - Backend"
+        $buildNumber = "$(Build.BuildNumber)"
+        $triggeredBy = "$(Build.RequestedFor)"
+        $changeLog = "Triggered by Backend $($buildNumber)."
+
+        $payload = @{
+          type = "message"
+          attachments = @(
+            @{
+              contentType = "application/vnd.microsoft.card.adaptive"
+              content = @{
+                '$schema' = "http://adaptivecards.io/schemas/adaptive-card.json"
+                type = "AdaptiveCard"
+                version = "1.4"
+                body = @(
+                  @{
+                    type = "TextBlock"
+                    text = "Azure Release Completed Successfully"
+                    size = "Large"
+                    weight = "Bolder"
+                    color = "Good"
+                  },
+                  @{
+                    type = "TextBlock"
+                    text = "Deployment completed successfully."
+                    isSubtle = $true
+                    spacing = "None"
+                  },
+                  @{
+                    type = "FactSet"
+                    spacing = "Medium"
+                    facts = @(
+                      @{ title = "Project"; value = $projectName },
+                      @{ title = "Release"; value = "Release-$buildNumber" },
+                      @{ title = "Build"; value = $buildNumber },
+                      @{ title = "Triggered By"; value = $triggeredBy }
+                    )
+                  },
+                  @{
+                    type = "TextBlock"
+                    text = "Change Log"
+                    weight = "Bolder"
+                    spacing = "Medium"
+                  },
+                  @{
+                    type = "TextBlock"
+                    text = $changeLog
+                    isSubtle = $true
+                    spacing = "None"
+                  },
+                  @{
+                    type = "TextBlock"
+                    text = "Website"
+                    weight = "Bolder"
+                    spacing = "Medium"
+                  },
+                  @{
+                    type = "TextBlock"
+                    text = "[$websiteUrl]($websiteUrl)"
+                    spacing = "None"
+                  }
+                )
+                actions = @(
+                  @{
+                    type = "Action.OpenUrl"
+                    title = "Open Website"
+                    url = $websiteUrl
+                  }
+                )
+              }
+            }
+          )
+        } | ConvertTo-Json -Depth 10
+
+        Invoke-RestMethod -Uri $webhookUrl -Method Post -Body $payload -ContentType 'application/json'
+      displayName: "Teams Notification - Success"
+      condition: succeeded()
+
+    - pwsh: |
+        $webhookUrl = "$(teamsWebhookUrl)"
+        $projectName = "DEV - Backend"
+        $buildNumber = "$(Build.BuildNumber)"
+        $triggeredBy = "$(Build.RequestedFor)"
+        $logsUrl = "$(System.TeamFoundationCollectionUri)$(System.TeamProject)/_build/results?buildId=$(Build.BuildId)"
+
+        $payload = @{
+          type = "message"
+          attachments = @(
+            @{
+              contentType = "application/vnd.microsoft.card.adaptive"
+              content = @{
+                '$schema' = "http://adaptivecards.io/schemas/adaptive-card.json"
+                type = "AdaptiveCard"
+                version = "1.4"
+                body = @(
+                  @{
+                    type = "TextBlock"
+                    text = "Azure Release Failed"
+                    size = "Large"
+                    weight = "Bolder"
+                    color = "Attention"
+                  },
+                  @{
+                    type = "TextBlock"
+                    text = "Deployment has failed. Please check the pipeline logs."
+                    isSubtle = $true
+                    spacing = "None"
+                  },
+                  @{
+                    type = "FactSet"
+                    spacing = "Medium"
+                    facts = @(
+                      @{ title = "Project"; value = $projectName },
+                      @{ title = "Release"; value = "Release-$buildNumber" },
+                      @{ title = "Build"; value = $buildNumber },
+                      @{ title = "Triggered By"; value = $triggeredBy }
+                    )
+                  }
+                )
+                actions = @(
+                  @{
+                    type = "Action.OpenUrl"
+                    title = "View Pipeline Logs"
+                    url = $logsUrl
+                  }
+                )
+              }
+            }
+          )
+        } | ConvertTo-Json -Depth 10
+
+        Invoke-RestMethod -Uri $webhookUrl -Method Post -Body $payload -ContentType 'application/json'
+      displayName: "Teams Notification - Failure"
+      condition: failed()
+
