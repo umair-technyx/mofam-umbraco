@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mofam-cms-svc
+  namespace: mofam
+  labels:
+    app: mofam-cms
+spec:
+  type: ClusterIP            # Use 'LoadBalancer' if you want Azure to assign a direct public IP
+  selector:
+    app: mofam-cms
+  ports:
+  - name: http
+    port: 80                 # Service port
+    targetPort: 8080         # Matches the container port
+    protocol: TCP

@@ -1,90 +1,27 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: umbraco
+  name: mofam-cms
+  namespace: mofam
 spec:
-  replicas: 4
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxUnavailable: 0
-      maxSurge: 1
+  replicas: 1
   selector:
     matchLabels:
-      app: umbraco
+      app: mofam-cms
   template:
     metadata:
       labels:
-        app: umbraco
+        app: mofam-cms
+        azure.workload.identity/use: "true"
     spec:
-      terminationGracePeriodSeconds: 30
-      imagePullSecrets:
-        - name: regcred
-      securityContext:
-        fsGroup: 1000
+      serviceAccountName: mofam-sa
       containers:
-      - name: umbraco
-        image: rafay7655/umbraco-poc:v1.0.3
+      - name: mofam-cms
+        image: acrmofamuaen.azurecr.io/mofam-umbraco:a0b178e
         ports:
         - containerPort: 8080
-        securityContext:
-          runAsUser: 1000
-          runAsGroup: 1000
-          runAsNonRoot: true
-          allowPrivilegeEscalation: false
-          readOnlyRootFilesystem: true
-          capabilities:
-            drop: ["ALL"]
         env:
         - name: ASPNETCORE_ENVIRONMENT
           value: "Production"
-        - name: Umbraco__CMS__Global__VersionCheckPeriod
-          value: "0"
-        - name: ConnectionStrings__umbracoDbDSN
-          valueFrom:
-            secretKeyRef:
-              name: umbraco-db-secret
-              key: connectionstring
-        resources:
-          requests:
-            cpu: "250m"
-            memory: "512Mi"
-          limits:
-            cpu: "1"
-            memory: "1Gi"
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: 8080
-          initialDelaySeconds: 15
-          periodSeconds: 5
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 8080
-          initialDelaySeconds: 30
-          periodSeconds: 10
-        startupProbe:
-          httpGet:
-            path: /health
-            port: 8080
-          failureThreshold: 30
-          periodSeconds: 5
-        lifecycle:
-          preStop:
-            exec:
-              command: ["sh", "-c", "sleep 10"]
-        volumeMounts:
-        - mountPath: /app/wwwroot/media
-          name: umbraco-media
-          subPath: media
-        - mountPath: /app/wwwroot/App_Data
-          name: umbraco-media
-          subPath: appdata
-        - mountPath: /app/umbraco/Data
-          name: umbraco-media
-          subPath: umbracodata
-      volumes:
-      - name: umbraco-media
-        persistentVolumeClaim:
-          claimName: umbraco-pvc  
+        - name: KeyVault__URL
+          value: "https://kv-mofam-uaen.vault.azure.net/"

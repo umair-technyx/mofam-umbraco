@@ -2,14 +2,19 @@ trigger:
   branches:
     include:
     - develop
-  
+
 pool:
   vmImage: ubuntu-latest
 
 variables:
 - group: MOFAM
+- name: deploymentFile
+  value: 'k8s/deployment.yml'
   
 stages:
+# =========================================================
+# STAGE 1: BUILD & PUSH TO ACR
+# =========================================================
 - stage: Build
   displayName: Build + Push + Prepare Artifact
   jobs:
@@ -39,3 +44,66 @@ stages:
           IMAGE="$(acrLoginServer)/$(MofamBeRepo):$(SHORT_SHA)"
           docker build -t "$IMAGE" .
           docker push "$IMAGE"
+
+    # Prepare deployable manifests in artifact staging
+    - bash: |
+        set -e
+        mkdir -p "$(Build.ArtifactStagingDirectory)/manifests"
+        cp -r k8s/* "$(Build.ArtifactStagingDirectory)/manifests/"
+
+        REL_PATH="$(echo '$(deploymentFile)' | sed 's|^k8s/||')"
+        ARTIFACT_DEPLOYMENT_FILE="$(Build.ArtifactStagingDirectory)/manifests/$REL_PATH"
+
+        echo "Repo deploymentFile: $(deploymentFile)"
+        echo "REL_PATH: $REL_PATH"
+        echo "Artifact deployment file: $ARTIFACT_DEPLOYMENT_FILE"
+
+        # Dynamically updates the image tag to the new SHORT_SHA
+        sed -i -E "s|image:\s*.*$(MofamBeRepo):.*|image: $(acrLoginServer)/$(MofamBeRepo):$(SHORT_SHA)|g" \
+          "$ARTIFACT_DEPLOYMENT_FILE"
+
+        echo "Updated manifest:"
+        cat "$ARTIFACT_DEPLOYMENT_FILE"
+        echo "Manifest prepared with tag $(SHORT_SHA):"
+      displayName: "Prepare manifests with new tag"
+
+    - task: PublishPipelineArtifact@1
+      displayName: "Publish deploy artifact"
+      inputs:
+        targetPath: '$(Build.ArtifactStagingDirectory)'
+        artifact: 'drop'
+
+# =========================================================
+# STAGE 2: DEPLOY TO AKS
+# =========================================================
+- stage: Deploy
+  displayName: Deploy to AKS
+  dependsOn: Build
+  jobs:
+  - job: deploy
+    displayName: Deploy job
+    steps:
+    - download: current
+      artifact: drop
+
+    - task: AzureCLI@2
+      displayName: "Get AKS credentials"
+      inputs:
+        azureSubscription: $(azureServiceConnection)
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          set -e
+          az aks get-credentials -g $(aksResourceGroup) -n $(aksClusterName) --overwrite-existing
+
+    - bash: |
+        set -e
+        TAG="$(cat $(Pipeline.Workspace)/drop/tag.txt)"
+        echo "Deploying tag: $TAG"
+
+        echo "Applying all manifests from: $(Pipeline.Workspace)/drop/manifests/"
+        kubectl apply -f "$(Pipeline.Workspace)/drop/manifests/"
+        
+        # Wait for the mofam-cms deployment rollout in the mofam namespace
+        kubectl rollout status deployment/mofam-cms -n mofam --timeout=5m
+      displayName: "Apply Manifests + Rollout"
