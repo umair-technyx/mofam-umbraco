@@ -6,13 +6,16 @@ using Azure.Extensions.AspNetCore.Configuration.Secrets;
 using Azure.Storage.Blobs;
 using Umbraco.Cms.Core.DependencyInjection;
 using Umbraco.StorageProviders.AzureBlob.IO;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ApplicationModels;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.ResponseCompression;
+using Mofam.Domain.Constants;
 using Mofam.Domain.Models.Common;
 using Mofam.Domain.Options;
-using Mofam.CMS;
+using Mofam.CMS.Pages;
+using Mofam.CMS.Security;
 using Mofam.Infrastructure.HealthChecks;
 using Mofam.Infrastructure.Middleware;
 using Mofam.Infrastructure.Routing;
@@ -55,15 +58,34 @@ if (!rateLimitSection.Exists())
 var rateLimitOptions = new RateLimitOptions();
 rateLimitSection.Bind(rateLimitOptions);
 
-if (rateLimitOptions.PermitLimit <= 0 || rateLimitOptions.WindowSeconds <= 0)
+if (rateLimitOptions.PermitLimit <= 0 || rateLimitOptions.WindowSeconds <= 0
+    || rateLimitOptions.SignInPermitLimit <= 0 || rateLimitOptions.SignInWindowSeconds <= 0)
 {
     throw new InvalidOperationException(
-        $"Invalid '{RateLimitOptions.SectionName}' configuration — PermitLimit and WindowSeconds must be greater than 0.");
+        $"Invalid '{RateLimitOptions.SectionName}' configuration — PermitLimit, WindowSeconds, SignInPermitLimit and SignInWindowSeconds must be greater than 0.");
 }
+
+// The sign in pages are open to everyone, so they have their own limit per client address.
+var entraSettings = builder.Configuration.GetSection(EntraBackOfficeOptions.SectionName).Get<EntraBackOfficeOptions>()
+                    ?? new EntraBackOfficeOptions();
+string[] signInPaths = [entraSettings.CallbackPath, entraSettings.SignedOutCallbackPath, GeneralConstants.SignInErrorPath];
 
 builder.Services.AddRateLimiter(rateLimiterOptions =>
 {
     rateLimiterOptions.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    rateLimiterOptions.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(http =>
+        signInPaths.Any(path => http.Request.Path.Equals(path, StringComparison.OrdinalIgnoreCase))
+            ? RateLimitPartition.GetFixedWindowLimiter(
+                http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = rateLimitOptions.SignInPermitLimit,
+                    Window = TimeSpan.FromSeconds(rateLimitOptions.SignInWindowSeconds),
+                    QueueLimit = 0,
+                })
+            : RateLimitPartition.GetNoLimiter("other"));
+
     rateLimiterOptions.AddFixedWindowLimiter("api", limiterOptions =>
     {
         limiterOptions.PermitLimit = rateLimitOptions.PermitLimit;
@@ -98,7 +120,22 @@ builder.WebHost.ConfigureKestrel(kestrelOptions =>
     kestrelOptions.Limits.MaxRequestBodySize = 5 * 1024 * 1024; // 5 MB
 });
 
+var allowedHosts = (builder.Configuration["AllowedHosts"] ?? string.Empty).Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+builder.Services.Configure<ForwardedHeadersOptions>(forwardedOptions =>
+{
+    forwardedOptions.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost;
+    forwardedOptions.KnownIPNetworks.Clear();
+    forwardedOptions.KnownProxies.Clear();
+
+    if (allowedHosts.Length > 0 && !allowedHosts.Contains("*"))
+    {
+        forwardedOptions.AllowedHosts = allowedHosts;
+    }
+});
+
 builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<SignInErrorToken>();
 builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck>("database");
 
 builder.Services.Configure<MvcOptions>(options =>
@@ -136,6 +173,9 @@ WebApplication app = builder.Build();
 
 await app.BootUmbracoAsync();
 
+// First, so everything after it sees the real scheme and host.
+app.UseForwardedHeaders();
+
 app.UseResponseCompression();
 
 app.UseMiddleware<GlobalExceptionMiddleware>();
@@ -149,6 +189,27 @@ app.UseWhen(ctx => ctx.Request.Path.StartsWithSegments("/api"), branch =>
 app.UseHttpsRedirection();
 app.UseCors(CorsPolicyName);
 app.UseRateLimiter();
+
+app.Use(async (http, next) =>
+{
+    if (HttpMethods.IsGet(http.Request.Method)
+        && http.Request.Path.Equals(GeneralConstants.SignInErrorPath, StringComparison.OrdinalIgnoreCase)
+        && http.RequestServices.GetRequiredService<SignInErrorToken>()
+            .TryRead(http.Request.Query[GeneralConstants.SignInErrorTokenQuery], out var reason, out var reference))
+    {
+        // The page must not be cached, shown in another site, or sent as a referrer (the address has a token).
+        http.Response.Headers.CacheControl = "no-store";
+        http.Response.Headers.XFrameOptions = "DENY";
+        http.Response.Headers.XContentTypeOptions = "nosniff";
+        http.Response.Headers["Referrer-Policy"] = "no-referrer";
+
+        http.Response.ContentType = "text/html; charset=utf-8";
+        await http.Response.WriteAsync(SignInErrorPage.Html(reason, reference));
+        return;
+    }
+
+    await next();
+});
 
 app.UseUmbraco()
     .WithMiddleware(u =>
@@ -164,6 +225,7 @@ app.UseUmbraco()
         u.EndpointRouteBuilder.MapHealthChecks("/health");
         u.EndpointRouteBuilder.MapGet("/", (Umbraco.Cms.Core.Configuration.IUmbracoVersion umbracoVersion) =>
             Results.Content(StatusPage.Html(umbracoVersion.SemanticVersion.ToString().Split('+')[0]), "text/html"));
+
     });
 
 await app.RunAsync();

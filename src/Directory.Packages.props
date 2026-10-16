@@ -13,6 +13,7 @@
 
     <!-- Azure Key Vault -->
     <PackageVersion Include="Azure.Identity" Version="1.21.0" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.13" />
     <PackageVersion Include="Azure.Extensions.AspNetCore.Configuration.Secrets" Version="1.5.2" />
 
     <!-- Media in Azure Blob Storage -->

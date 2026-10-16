@@ -1,11 +1,12 @@
 using System.Net;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
 using Mofam.Domain.Models.Common;
 
 namespace Mofam.Infrastructure.Middleware;
 
-public sealed class GlobalExceptionMiddleware(RequestDelegate next)
+public sealed class GlobalExceptionMiddleware(RequestDelegate next, ILogger<GlobalExceptionMiddleware> logger)
 {
     public async Task InvokeAsync(HttpContext context)
     {
@@ -15,6 +16,9 @@ public sealed class GlobalExceptionMiddleware(RequestDelegate next)
         }
         catch (Exception ex)
         {
+            // The client gets only a generic message and the trace id. The real error is written to the log.
+            logger.LogError(ex, "Unhandled exception. TraceId {TraceId}, path {Path}", context.TraceIdentifier, context.Request.Path);
+
             var (statusCode, message) = ex switch
             {
                 UnauthorizedAccessException => (HttpStatusCode.Unauthorized, "Unauthorized."),
