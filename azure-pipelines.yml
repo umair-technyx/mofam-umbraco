@@ -222,6 +222,13 @@ stages:
           semgrep_file = os.path.join(report_dir, "semgrep.json")
           osv_file = os.path.join(report_dir, "osv.json")
 
+          def clean_path(p):
+              if not p: return ""
+              for prefix in ["/home/vsts/work/1/s/", "/home/vsts/work/1/s", "/src/", "D:/a/1/s/", "D:\\a\\1\\s\\"]:
+                  if p.startswith(prefix):
+                      return p[len(prefix):]
+              return p
+
           # 1. Parse Gitleaks
           secrets = []
           try:
@@ -267,29 +274,99 @@ stages:
           status_text = "PASSED (0 Issues)" if total_violations == 0 else f"ISSUES DETECTED ({total_violations} Findings)"
           now = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
 
+          # Semgrep HTML Cards (Full-Width Message Layout)
+          semgrep_html = ""
+          if not sast_findings:
+              semgrep_html = "<p class='clean'>✔ No OWASP code security vulnerabilities found.</p>"
+          else:
+              for f in sast_findings:
+                  rule = f.get('check_id', 'Unknown Rule')
+                  path = clean_path(f.get('path', ''))
+                  line = f.get('start', {}).get('line', '')
+                  severity = f.get('extra', {}).get('severity', 'WARNING').upper()
+                  msg = f.get('extra', {}).get('message', '').strip()
+                  sev_color = "#ef4444" if severity == "ERROR" else "#f59e0b"
+                  
+                  semgrep_html += f"""
+                  <div class="issue-card" style="border-left-color: {sev_color};">
+                    <div class="issue-header">
+                      <div class="issue-title-group">
+                        <span class="sev-badge" style="background: {sev_color};">{severity}</span>
+                        <span class="rule-name">{rule}</span>
+                      </div>
+                      <div class="file-loc"><code>{path}:{line}</code></div>
+                    </div>
+                    <div class="issue-msg">
+                      <div class="msg-label">Remediation & Details:</div>
+                      <div class="msg-content">{msg}</div>
+                    </div>
+                  </div>
+                  """
+
+          # Gitleaks HTML Table
+          gitleaks_html = ""
+          if not secrets:
+              gitleaks_html = "<p class='clean'>✔ No secrets detected in repository commits.</p>"
+          else:
+              gitleaks_rows = "".join([f"<tr><td><strong>{s.get('RuleID','')}</strong></td><td><code>{clean_path(s.get('File',''))}</code></td><td>{s.get('StartLine','')}</td></tr>" for s in secrets])
+              gitleaks_html = f"""<table class="data-table">
+                <thead><tr><th style="width: 35%;">Rule</th><th style="width: 50%;">Location</th><th style="width: 15%;">Line</th></tr></thead>
+                <tbody>{gitleaks_rows}</tbody>
+              </table>"""
+
+          # OSV HTML Table
+          osv_html = ""
+          if not deps:
+              osv_html = "<p class='clean'>✔ All NuGet / third-party packages match known secure versions.</p>"
+          else:
+              osv_rows = "".join([f"<tr><td><strong>{d['name']}</strong></td><td>{d['version']}</td><td><code>{d['id']}</code></td><td><span style='color:#38bdf8; font-weight:bold;'>{d['fixed']}</span></td></tr>" for d in deps])
+              osv_html = f"""<table class="data-table">
+                <thead><tr><th style="width: 25%;">Package</th><th style="width: 15%;">Installed</th><th style="width: 40%;">Vulnerability ID</th><th style="width: 20%;">Fixed In</th></tr></thead>
+                <tbody>{osv_rows}</tbody>
+              </table>"""
+
           html = f"""<!DOCTYPE html>
           <html>
           <head>
             <meta charset="utf-8">
             <title>Security Scan Report - Umbraco Backend</title>
             <style>
-              @media print {{ @page {{ margin: 1cm; }} }}
-              body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 30px; }}
-              .container {{ max-width: 1000px; margin: 0 auto; background: #1e293b; border-radius: 12px; padding: 30px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }}
-              h1 {{ margin: 0 0 10px 0; font-size: 26px; }}
-              .meta {{ color: #94a3b8; font-size: 14px; margin-bottom: 25px; }}
-              .badge {{ display: inline-block; padding: 6px 14px; border-radius: 20px; font-weight: bold; background: {status_color}; color: #fff; }}
-              .cards {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin: 25px 0; }}
-              .card {{ background: #334155; padding: 20px; border-radius: 8px; text-align: center; }}
-              .card h3 {{ margin: 0 0 8px 0; font-size: 14px; color: #cbd5e1; }}
-              .card .count {{ font-size: 28px; font-weight: bold; }}
-              .section {{ margin-top: 30px; }}
-              .section h2 {{ font-size: 18px; border-bottom: 2px solid #475569; padding-bottom: 8px; color: #38bdf8; }}
-              table {{ width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }}
-              th, td {{ padding: 10px; text-align: left; border-bottom: 1px solid #475569; }}
-              th {{ background: #0f172a; color: #94a3b8; }}
-              .clean {{ color: #2ecc71; font-weight: 500; padding: 10px 0; }}
-              code {{ background: #0f172a; padding: 2px 6px; border-radius: 4px; color: #f43f5e; }}
+              @media print {{
+                @page {{ size: A4 portrait; margin: 1cm; }}
+                body {{ -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }}
+                .issue-card {{ break-inside: avoid; page-break-inside: avoid; }}
+              }}
+              body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 25px; }}
+              .container {{ max-width: 1000px; margin: 0 auto; background: #1e293b; border-radius: 12px; padding: 25px 30px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }}
+              h1 {{ margin: 0 0 8px 0; font-size: 24px; }}
+              .meta {{ color: #94a3b8; font-size: 13px; margin-bottom: 20px; }}
+              .badge {{ display: inline-block; padding: 5px 12px; border-radius: 20px; font-weight: bold; background: {status_color}; color: #fff; font-size: 12px; margin-left: 6px; }}
+              .cards {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin: 20px 0; }}
+              .card {{ background: #334155; padding: 16px; border-radius: 8px; text-align: center; }}
+              .card h3 {{ margin: 0 0 6px 0; font-size: 13px; color: #cbd5e1; }}
+              .card .count {{ font-size: 26px; font-weight: bold; }}
+              .section {{ margin-top: 25px; }}
+              .section h2 {{ font-size: 16px; border-bottom: 2px solid #475569; padding-bottom: 6px; color: #38bdf8; margin-bottom: 12px; }}
+              
+              /* Issue Card Styles for Semgrep */
+              .issue-card {{ background: #273549; border-left: 4px solid #ef4444; border-radius: 6px; padding: 14px 18px; margin-bottom: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }}
+              .issue-header {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #3d4d65; padding-bottom: 8px; margin-bottom: 10px; flex-wrap: wrap; gap: 8px; }}
+              .issue-title-group {{ display: flex; align-items: center; gap: 10px; }}
+              .sev-badge {{ color: #fff; font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 4px; letter-spacing: 0.5px; }}
+              .rule-name {{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; color: #cbd5e1; word-break: break-all; }}
+              .file-loc {{ font-size: 12px; color: #94a3b8; }}
+              .file-loc code {{ background: #0f172a; padding: 3px 8px; border-radius: 4px; color: #38bdf8; font-size: 12px; }}
+              .issue-msg {{ font-size: 13px; line-height: 1.6; color: #e2e8f0; }}
+              .msg-label {{ font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #94a3b8; font-weight: 700; margin-bottom: 4px; }}
+              .msg-content {{ text-align: justify; }}
+
+              /* Table Styles for Gitleaks & OSV */
+              .data-table {{ width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 13px; table-layout: fixed; }}
+              .data-table th, .data-table td {{ padding: 10px 12px; text-align: left; border-bottom: 1px solid #475569; word-wrap: break-word; overflow-wrap: break-word; }}
+              .data-table th {{ background: #0f172a; color: #94a3b8; font-size: 12px; text-transform: uppercase; }}
+              .data-table td {{ vertical-align: top; }}
+              .clean {{ color: #2ecc71; font-weight: 500; padding: 6px 0; font-size: 13px; }}
+              code {{ background: #0f172a; padding: 2px 6px; border-radius: 4px; color: #f43f5e; font-size: 12px; }}
             </style>
           </head>
           <body>
@@ -305,17 +382,17 @@ stages:
 
               <div class="section">
                 <h2>1. Secret Detection (Gitleaks)</h2>
-                {"<p class='clean'>✔ No secrets detected in repository commits.</p>" if not secrets else "<table><tr><th>Rule</th><th>File</th><th>Line</th></tr>" + "".join([f"<tr><td>{s.get('RuleID','')}</td><td><code>{s.get('File','')}</code></td><td>{s.get('StartLine','')}</td></tr>" for s in secrets]) + "</table>"}
+                {gitleaks_html}
               </div>
 
               <div class="section">
                 <h2>2. Static Code Analysis (Semgrep)</h2>
-                {"<p class='clean'>✔ No OWASP code security vulnerabilities found.</p>" if not sast_findings else "<table><tr><th>Rule</th><th>File</th><th>Line</th><th>Message</th></tr>" + "".join([f"<tr><td>{f.get('check_id','')}</td><td><code>{f.get('path','')}</code></td><td>{f.get('start',{}).get('line','')}</td><td>{f.get('extra',{}).get('message','')}</td></tr>" for f in sast_findings]) + "</table>"}
+                {semgrep_html}
               </div>
 
               <div class="section">
                 <h2>3. Dependency Vulnerabilities (Google OSV)</h2>
-                {"<p class='clean'>✔ All NuGet / third-party packages match known secure versions.</p>" if not deps else "<table><tr><th>Package</th><th>Version</th><th>Vulnerability ID</th><th>Fixed In</th></tr>" + "".join([f"<tr><td><strong>{d['name']}</strong></td><td>{d['version']}</td><td><code>{d['id']}</code></td><td><span style='color:#38bdf8;'>{d['fixed']}</span></td></tr>" for d in deps]) + "</table>"}
+                {osv_html}
               </div>
             </div>
           </body>
@@ -346,6 +423,21 @@ stages:
         targetPath: '$(SECURITY_REPORT_DIR)'
         artifact: 'Security-Reports'
         publishLocation: 'pipeline'
+
+    # =========================================================
+    # ENFORCE SECURITY QUALITY GATE
+    # =========================================================
+    - bash: |
+        REPORT="$(SECURITY_REPORT_DIR)/security-report.html"
+        
+        if [ -f "$REPORT" ] && grep -q "ISSUES DETECTED" "$REPORT"; then
+          echo "##vso[task.logissue type=error]Security Quality Gate FAILED: Vulnerabilities or security flaws detected."
+          echo "Please download the Security-Reports artifact to inspect the findings."
+          exit 1
+        fi
+        
+        echo "##[section]Security Quality Gate PASSED: 0 violations found."
+      displayName: "Security: Enforce Quality Gate"
 
     - task: AzureCLI@2
       displayName: "Build & Push to ACR"
