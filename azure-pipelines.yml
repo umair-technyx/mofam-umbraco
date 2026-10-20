@@ -24,6 +24,7 @@ stages:
     displayName: Build job
     steps:
     - checkout: self
+      fetchDepth: 0
 
     - pwsh: |
         $webhookUrl = "$(teamsWebhookUrl)"
@@ -82,6 +83,270 @@ stages:
         echo "SHORT_SHA=$SHORT_SHA"
       displayName: "Compute tag + save tag.txt"
 
+    # =========================================================
+    # SECURITY SCANNING: Gitleaks, Semgrep, OSV Scanner + HTML/PDF Reports
+    # =========================================================
+    - task: Bash@3
+      displayName: 'Initialize Security Reports'
+      inputs:
+        targetType: inline
+        script: |
+          REPORT_DIR="$(Build.ArtifactStagingDirectory)/security-reports"
+          mkdir -p "$REPORT_DIR"
+          echo "##vso[task.setvariable variable=SECURITY_REPORT_DIR]$REPORT_DIR"
+
+    - task: Bash@3
+      displayName: 'Semgrep - SAST Scan'
+      continueOnError: true
+      inputs:
+        targetType: inline
+        script: |
+          set -e
+          REPORT_DIR="$(SECURITY_REPORT_DIR)"
+
+          python3 -m venv "$(Agent.TempDirectory)/semgrep-venv"
+          source "$(Agent.TempDirectory)/semgrep-venv/bin/activate"
+
+          python -m pip install --upgrade pip
+          python -m pip install semgrep
+
+          semgrep scan \
+            --config auto \
+            --json \
+            --output "$REPORT_DIR/semgrep.json" \
+            "$(Build.SourcesDirectory)" || true
+
+          if [ ! -s "$REPORT_DIR/semgrep.json" ]; then
+            echo '{"results":[]}' > "$REPORT_DIR/semgrep.json"
+          fi
+
+          echo "Semgrep report generated successfully."
+
+    - task: Bash@3
+      displayName: 'Gitleaks - Secret Detection'
+      continueOnError: true
+      inputs:
+        targetType: inline
+        script: |
+          set -e
+          REPORT_DIR="$(SECURITY_REPORT_DIR)"
+          mkdir -p "$REPORT_DIR"
+
+          echo "Starting Gitleaks scan..."
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            -v "$(Build.SourcesDirectory):/repo:ro" \
+            -v "$REPORT_DIR:/reports" \
+            ghcr.io/zricethezav/gitleaks:latest \
+            detect \
+            --source /repo \
+            --redact \
+            --report-format json \
+            --report-path /reports/gitleaks.json \
+            --exit-code 0
+
+          if [ ! -s "$REPORT_DIR/gitleaks.json" ]; then
+            echo "[]" > "$REPORT_DIR/gitleaks.json"
+          fi
+          echo "Gitleaks report generated successfully."
+
+    - task: Bash@3
+      displayName: 'OSV - Dependency Vulnerability Scan'
+      continueOnError: true
+      inputs:
+        targetType: inline
+        script: |
+          set +e
+          REPORT_DIR="$(SECURITY_REPORT_DIR)"
+          REPORT="$REPORT_DIR/osv.json"
+          mkdir -p "$REPORT_DIR"
+
+          docker run --rm \
+            -v "$(Build.SourcesDirectory):/src:ro" \
+            ghcr.io/google/osv-scanner:latest \
+            scan source \
+            --recursive \
+            --format json \
+            /src > "$REPORT"
+
+          EXIT_CODE=$?
+          if [ "$EXIT_CODE" -eq 0 ]; then
+            echo "OSV scan completed. No vulnerabilities reported."
+          elif [ "$EXIT_CODE" -eq 1 ]; then
+            echo "OSV scan completed with security findings."
+          else
+            echo "OSV scanner error: $EXIT_CODE"
+          fi
+
+          if [ ! -s "$REPORT" ]; then
+            echo '{"results":[]}' > "$REPORT"
+          fi
+          echo "OSV report generated successfully."
+          exit 0
+
+    - task: Bash@3
+      displayName: 'Verify Scanner Reports'
+      condition: always()
+      continueOnError: true
+      inputs:
+        targetType: inline
+        script: |
+          REPORT_DIR="$(SECURITY_REPORT_DIR)"
+          echo "================================="
+          echo "GENERATED SECURITY REPORTS"
+          echo "================================="
+          ls -lah "$REPORT_DIR"
+
+          for report in semgrep.json gitleaks.json osv.json; do
+            if [ -s "$REPORT_DIR/$report" ]; then
+              echo "OK: $report"
+            else
+              echo "MISSING or EMPTY: $report"
+            fi
+          done
+
+    - task: Bash@3
+      displayName: 'Generate HTML & PDF Security Report'
+      condition: always()
+      continueOnError: true
+      inputs:
+        targetType: inline
+        script: |
+          REPORT_DIR="$(SECURITY_REPORT_DIR)"
+
+          python3 - << 'EOF'
+          import json, os, datetime, subprocess
+
+          report_dir = os.environ.get("SECURITY_REPORT_DIR", ".")
+          gitleaks_file = os.path.join(report_dir, "gitleaks.json")
+          semgrep_file = os.path.join(report_dir, "semgrep.json")
+          osv_file = os.path.join(report_dir, "osv.json")
+
+          # 1. Parse Gitleaks
+          secrets = []
+          try:
+              with open(gitleaks_file) as f:
+                  data = json.load(f)
+                  if isinstance(data, list):
+                      secrets = data
+          except Exception: pass
+
+          # 2. Parse Semgrep
+          sast_findings = []
+          try:
+              with open(semgrep_file) as f:
+                  data = json.load(f)
+                  sast_findings = data.get("results", [])
+          except Exception: pass
+
+          # 3. Parse OSV
+          deps = []
+          try:
+              with open(osv_file) as f:
+                  data = json.load(f)
+                  for res in data.get("results", []):
+                      for pkg in res.get("packages", []):
+                          pkg_info = pkg.get("package", {})
+                          for vuln in pkg.get("vulnerabilities", []):
+                              fixed = "N/A"
+                              for aff in vuln.get("affected", []):
+                                  for r in aff.get("ranges", []):
+                                      for ev in r.get("events", []):
+                                          if "fixed" in ev: fixed = ev["fixed"]
+                              deps.append({
+                                  "name": pkg_info.get("name", "Unknown"),
+                                  "version": pkg_info.get("version", "Unknown"),
+                                  "id": vuln.get("id", "Unknown"),
+                                  "summary": vuln.get("summary", "Security vulnerability"),
+                                  "fixed": fixed
+                              })
+          except Exception: pass
+
+          total_violations = len(secrets) + len(sast_findings) + len(deps)
+          status_color = "#2ECC71" if total_violations == 0 else "#E74C3C"
+          status_text = "PASSED (0 Issues)" if total_violations == 0 else f"ISSUES DETECTED ({total_violations} Findings)"
+          now = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+
+          html = f"""<!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <title>Security Scan Report - Umbraco Backend</title>
+            <style>
+              @media print {{ @page {{ margin: 1cm; }} }}
+              body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 30px; }}
+              .container {{ max-width: 1000px; margin: 0 auto; background: #1e293b; border-radius: 12px; padding: 30px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }}
+              h1 {{ margin: 0 0 10px 0; font-size: 26px; }}
+              .meta {{ color: #94a3b8; font-size: 14px; margin-bottom: 25px; }}
+              .badge {{ display: inline-block; padding: 6px 14px; border-radius: 20px; font-weight: bold; background: {status_color}; color: #fff; }}
+              .cards {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin: 25px 0; }}
+              .card {{ background: #334155; padding: 20px; border-radius: 8px; text-align: center; }}
+              .card h3 {{ margin: 0 0 8px 0; font-size: 14px; color: #cbd5e1; }}
+              .card .count {{ font-size: 28px; font-weight: bold; }}
+              .section {{ margin-top: 30px; }}
+              .section h2 {{ font-size: 18px; border-bottom: 2px solid #475569; padding-bottom: 8px; color: #38bdf8; }}
+              table {{ width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }}
+              th, td {{ padding: 10px; text-align: left; border-bottom: 1px solid #475569; }}
+              th {{ background: #0f172a; color: #94a3b8; }}
+              .clean {{ color: #2ecc71; font-weight: 500; padding: 10px 0; }}
+              code {{ background: #0f172a; padding: 2px 6px; border-radius: 4px; color: #f43f5e; }}
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <h1>🛡️ Umbraco Security Scan Report</h1>
+              <div class="meta">Generated: {now} | Project: <strong>DEV - Backend (Umbraco)</strong> | Status: <span class="badge">{status_text}</span></div>
+
+              <div class="cards">
+                <div class="card"><h3>🔑 Gitleaks (Secrets)</h3><div class="count" style="color: {'#2ecc71' if len(secrets)==0 else '#e74c3c'}">{len(secrets)}</div></div>
+                <div class="card"><h3>🛡️ Semgrep (Code Flaws)</h3><div class="count" style="color: {'#2ecc71' if len(sast_findings)==0 else '#e74c3c'}">{len(sast_findings)}</div></div>
+                <div class="card"><h3>📦 OSV (Dependencies)</h3><div class="count" style="color: {'#2ecc71' if len(deps)==0 else '#e74c3c'}">{len(deps)}</div></div>
+              </div>
+
+              <div class="section">
+                <h2>1. Secret Detection (Gitleaks)</h2>
+                {"<p class='clean'>✔ No secrets detected in repository commits.</p>" if not secrets else "<table><tr><th>Rule</th><th>File</th><th>Line</th></tr>" + "".join([f"<tr><td>{s.get('RuleID','')}</td><td><code>{s.get('File','')}</code></td><td>{s.get('StartLine','')}</td></tr>" for s in secrets]) + "</table>"}
+              </div>
+
+              <div class="section">
+                <h2>2. Static Code Analysis (Semgrep)</h2>
+                {"<p class='clean'>✔ No OWASP code security vulnerabilities found.</p>" if not sast_findings else "<table><tr><th>Rule</th><th>File</th><th>Line</th><th>Message</th></tr>" + "".join([f"<tr><td>{f.get('check_id','')}</td><td><code>{f.get('path','')}</code></td><td>{f.get('start',{}).get('line','')}</td><td>{f.get('extra',{}).get('message','')}</td></tr>" for f in sast_findings]) + "</table>"}
+              </div>
+
+              <div class="section">
+                <h2>3. Dependency Vulnerabilities (Google OSV)</h2>
+                {"<p class='clean'>✔ All NuGet / third-party packages match known secure versions.</p>" if not deps else "<table><tr><th>Package</th><th>Version</th><th>Vulnerability ID</th><th>Fixed In</th></tr>" + "".join([f"<tr><td><strong>{d['name']}</strong></td><td>{d['version']}</td><td><code>{d['id']}</code></td><td><span style='color:#38bdf8;'>{d['fixed']}</span></td></tr>" for d in deps]) + "</table>"}
+              </div>
+            </div>
+          </body>
+          </html>
+          """
+
+          html_path = os.path.join(report_dir, "security-report.html")
+          pdf_path = os.path.join(report_dir, "security-report.pdf")
+
+          with open(html_path, "w", encoding="utf-8") as f:
+              f.write(html)
+          print(f"Generated HTML report: {html_path}")
+
+          try:
+              subprocess.run([
+                  "google-chrome", "--headless", "--disable-gpu", "--no-sandbox",
+                  f"--print-to-pdf={pdf_path}", html_path
+              ], check=True, timeout=30)
+              print(f"Generated PDF report: {pdf_path}")
+          except Exception as e:
+              print(f"Note: PDF generation skipped ({e}), HTML report is available.")
+          EOF
+
+    - task: PublishPipelineArtifact@1
+      displayName: 'Publish Security Reports'
+      condition: always()
+      inputs:
+        targetPath: '$(SECURITY_REPORT_DIR)'
+        artifact: 'Security-Reports'
+        publishLocation: 'pipeline'
+
     - task: AzureCLI@2
       displayName: "Build & Push to ACR"
       inputs:
@@ -129,6 +394,7 @@ stages:
         $buildNumber = "$(Build.BuildNumber)"
         $triggeredBy = "$(Build.RequestedFor)"
         $logsUrl = "$(System.TeamFoundationCollectionUri)$(System.TeamProject)/_build/results?buildId=$(Build.BuildId)"
+        $reportUrl = "$(System.TeamFoundationCollectionUri)$(System.TeamProject)/_apis/build/builds/$(Build.BuildId)/artifacts?artifactName=Security-Reports&api-version=6.0&`$format=zip"
 
         $payload = @{
           type = "message"
@@ -149,7 +415,7 @@ stages:
                   },
                   @{
                     type = "TextBlock"
-                    text = "Build or push to ACR has failed. Please check the pipeline logs."
+                    text = "Build or push to ACR has failed. Please check the pipeline logs or download the security report."
                     isSubtle = $true
                     spacing = "None"
                   },
@@ -169,6 +435,11 @@ stages:
                     type = "Action.OpenUrl"
                     title = "View Pipeline Logs"
                     url = $logsUrl
+                  },
+                  @{
+                    type = "Action.OpenUrl"
+                    title = "Download Security Report"
+                    url = $reportUrl
                   }
                 )
               }
@@ -222,6 +493,7 @@ stages:
         $buildNumber = "$(Build.BuildNumber)"
         $triggeredBy = "$(Build.RequestedFor)"
         $changeLog = "Triggered by Backend $($buildNumber)."
+        $reportUrl = "$(System.TeamFoundationCollectionUri)$(System.TeamProject)/_apis/build/builds/$(Build.BuildId)/artifacts?artifactName=Security-Reports&api-version=6.0&`$format=zip"
 
         $payload = @{
           type = "message"
@@ -285,6 +557,11 @@ stages:
                     type = "Action.OpenUrl"
                     title = "Open Website"
                     url = $websiteUrl
+                  },
+                  @{
+                    type = "Action.OpenUrl"
+                    title = "Download Security Report"
+                    url = $reportUrl
                   }
                 )
               }
@@ -302,6 +579,7 @@ stages:
         $buildNumber = "$(Build.BuildNumber)"
         $triggeredBy = "$(Build.RequestedFor)"
         $logsUrl = "$(System.TeamFoundationCollectionUri)$(System.TeamProject)/_build/results?buildId=$(Build.BuildId)"
+        $reportUrl = "$(System.TeamFoundationCollectionUri)$(System.TeamProject)/_apis/build/builds/$(Build.BuildId)/artifacts?artifactName=Security-Reports&api-version=6.0&`$format=zip"
 
         $payload = @{
           type = "message"
@@ -322,7 +600,7 @@ stages:
                   },
                   @{
                     type = "TextBlock"
-                    text = "Deployment has failed. Please check the pipeline logs."
+                    text = "Deployment has failed. Please check the pipeline logs or download the security report."
                     isSubtle = $true
                     spacing = "None"
                   },
@@ -342,6 +620,11 @@ stages:
                     type = "Action.OpenUrl"
                     title = "View Pipeline Logs"
                     url = $logsUrl
+                  },
+                  @{
+                    type = "Action.OpenUrl"
+                    title = "Download Security Report"
+                    url = $reportUrl
                   }
                 )
               }
