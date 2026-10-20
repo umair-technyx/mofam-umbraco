@@ -15,9 +15,14 @@ spec:
         azure.workload.identity/use: "true"
     spec:
       serviceAccountName: mofam-sa
+      securityContext:
+        runAsNonRoot: true
       containers:
       - name: mofam-cms
         image: acrmofamuaen.azurecr.io/mofam-umbraco:a0b178e
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
         ports:
         - containerPort: 8080
         env:
