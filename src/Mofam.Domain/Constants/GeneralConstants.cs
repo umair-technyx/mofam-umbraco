@@ -1,8 +1,62 @@
 namespace Mofam.Domain.Constants;
-
-// General values used in more than one place: the client name and the sign in error page (address, reasons, messages).
 public static class GeneralConstants
 {
+    #region Request size
+
+    // The most bytes a request body to the API (/api/...) may have. A bigger one is refused before it is read.
+    public const int MaxApiRequestBodyBytes = 1024 * 1024;
+
+    #endregion
+
+    #region Email and phone patterns
+
+    // One plain email address (name@domain.tld): no display text, no comments, no second address and no line breaks.
+    // At most 254 characters, and at most 64 before the @.
+    public const string EmailPattern =
+        @"^(?=.{1,254}\z)(?!\.)(?!.*\.\.)[A-Za-z0-9!#$%&'*+/=?^_`{|}~.-]{1,64}(?<!\.)@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+\z";
+
+    // An optional + at the start, then digits (Arabic digits too), spaces, dots, hyphens and brackets. 7 to 15 digits (the international limit).
+    public const string PhonePattern =
+        @"^\+?(?=(?:\D*\d){7,15}\D*\z)[\d ().\-]+\z";
+
+    #endregion
+
+    #region Forms enums
+    public enum RecaptchaStatus
+    {
+        // reCAPTCHA is turned off in the settings.
+        Skipped,
+
+        // The token is valid, and the score is high enough.
+        Passed,
+
+        // The token is missing, wrong, for another action, or the score is too low.
+        Failed,
+
+        // Google could not be reached, or reCAPTCHA is turned on but not set up.
+        Unavailable,
+    }
+
+    #endregion
+
+    #region Failure messages
+
+    // The generic messages for a failure (503 and 500). They never show what went wrong inside the server.
+    public const string ServiceUnavailableMessage = "The service is temporarily unavailable. Please try again later.";
+    public const string UnexpectedErrorMessage = "Something went wrong. Please try again later.";
+
+    #endregion
+
+    #region Contact Us field messages
+
+    // For one field. They are the ErrorMessage of the attributes on ContactRequest: {0} is the field name, {1} is the number.
+    public const string FieldRequiredMessage = "{0} is required.";
+    public const string FieldTooLongMessage = "{0} must be at most {1} characters.";
+    public const string FieldInvalidMessage = "{0} is not valid.";
+    public const string FieldInvalidCharactersMessage = "{0} has characters that are not allowed.";
+
+    #endregion
+
     #region Client
 
     // The client name shown on the status page and the sign in error page.
@@ -32,6 +86,14 @@ public static class GeneralConstants
 
     // The most characters of an outside error text written to the log.
     public const int LogTextMaxLength = 200;
+
+    #endregion
+
+    #region Forms
+
+    // The forms that have their own rate limit counter (the last part of the path /api/web/form/{culture}/{form}).
+    // Add the name of each new form here. Any other name shares one "other" counter, so random paths cannot create endless counters.
+    public static readonly string[] FormNames = ["contact"];
 
     #endregion
 

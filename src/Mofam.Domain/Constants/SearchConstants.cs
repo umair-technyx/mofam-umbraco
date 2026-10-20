@@ -1,8 +1,4 @@
 namespace Mofam.Domain.Constants;
-
-// Search and filter settings. They depend on the content model, not the environment,
-// so they live in code and not in appsettings. Nothing here changes between
-// dev, staging and production.
 public static class SearchConstants
 {
     #region Index

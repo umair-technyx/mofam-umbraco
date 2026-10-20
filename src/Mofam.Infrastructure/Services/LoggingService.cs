@@ -12,6 +12,9 @@ namespace Mofam.Infrastructure.Services;
 
 public static class LoggingService
 {
+    // The logger of our own code: "logs" container (Development: Logs folder) and Sentry.
+    public static Serilog.ILogger AppLogger { get; private set; } = Logger.None;
+
     public static WebApplicationBuilder AddCentralizedLogging(this WebApplicationBuilder builder)
     {
         var loggerConfig = new LoggerConfiguration()
@@ -19,7 +22,14 @@ public static class LoggingService
             .Enrich.WithProperty("Environment", builder.Environment.EnvironmentName)
             .Enrich.FromLogContext();
 
-        AddSentrySinkIfEnabled(loggerConfig, builder.Configuration, builder.Environment.EnvironmentName);
+        // Sentry is built once as a sink. Our logger writes to it, and it is also registered as an ILogEventSink,
+        // so the logger that Umbraco builds later writes to it too. So errors of both reach Sentry.
+        var sentrySink = BuildSentryLogger(builder.Configuration, builder.Environment.EnvironmentName);
+        if (sentrySink is not null)
+        {
+            loggerConfig.WriteTo.Sink(sentrySink);
+            builder.Services.AddSingleton<ILogEventSink>(sentrySink);
+        }
 
         // The logs of our own code (the injected Serilog logger) and the logs of Umbraco go to different places.
         //  - Development: our logs go to Logs/logs-DD-MM-YYYY.txt. Umbraco keeps writing its own local file.
@@ -47,12 +57,12 @@ public static class LoggingService
             }
         }
 
-        Log.Logger = loggerConfig.CreateLogger();
+        AppLogger = loggerConfig.CreateLogger();
+        Log.Logger = AppLogger;
         Log.Logger.Information("Logging Initialized");
 
-        builder.Host.UseSerilog(Log.Logger);
-        builder.Services.AddSingleton<Serilog.ILogger>(Log.Logger);
-
+        // Umbraco builds its own logger later and replaces Log.Logger, the injected Serilog logger and the logger factory.
+        // So Program.cs registers AppLogger again after the Umbraco builder, and the code of the project uses it.
         return builder;
     }
 
@@ -100,7 +110,8 @@ public static class LoggingService
             .CreateLogger();
     }
 
-    private static void AddSentrySinkIfEnabled(LoggerConfiguration loggerConfig, IConfiguration configuration, string environmentName)
+    // A logger that writes to Sentry. Returns null when Sentry is turned off or has no Dsn, so nothing is sent.
+    private static Logger? BuildSentryLogger(IConfiguration configuration, string environmentName)
     {
         var sentrySection = configuration.GetSection("Sentry");
         var useSentry = sentrySection.GetValue<bool>("Enabled");
@@ -108,18 +119,21 @@ public static class LoggingService
         var appName = sentrySection.GetValue<string>("AppName");
         var minimumEventLevel = sentrySection.GetValue<string>("MinimumEventLevel");
 
-        if (!useSentry || string.IsNullOrWhiteSpace(sentryDsn)) return;
+        if (!useSentry || string.IsNullOrWhiteSpace(sentryDsn)) return null;
 
-        loggerConfig.WriteTo.Sentry(options =>
-        {
-            options.Dsn = sentryDsn;
-            options.Environment = environmentName;
-            options.AttachStacktrace = true;
-            options.MinimumEventLevel = Enum.TryParse(minimumEventLevel, true, out LogEventLevel level)
-                ? level
-                : LogEventLevel.Warning;
-            options.MinimumBreadcrumbLevel = LogEventLevel.Information;
-            options.DefaultTags.Add("ApplicationName", appName);
-        });
+        return new LoggerConfiguration()
+            .MinimumLevel.Verbose()
+            .WriteTo.Sentry(options =>
+            {
+                options.Dsn = sentryDsn;
+                options.Environment = environmentName;
+                options.AttachStacktrace = true;
+                options.MinimumEventLevel = Enum.TryParse(minimumEventLevel, true, out LogEventLevel level)
+                    ? level
+                    : LogEventLevel.Warning;
+                options.MinimumBreadcrumbLevel = LogEventLevel.Information;
+                options.DefaultTags.Add("ApplicationName", appName ?? string.Empty);
+            })
+            .CreateLogger();
     }
 }

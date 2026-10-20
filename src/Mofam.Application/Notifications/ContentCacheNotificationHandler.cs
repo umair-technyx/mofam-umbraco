@@ -5,11 +5,7 @@ using Umbraco.Cms.Core.Events;
 using Umbraco.Cms.Core.Notifications;
 
 namespace Mofam.Application.Notifications;
-
-// Clears the startup, filter and page cache when content is published, unpublished or deleted in the CMS,
-// so the API shows the new content right away.
-public sealed class ContentCacheNotificationHandler(IMemoryCache cache, PageCacheToken pageCacheToken)
-    : INotificationHandler<ContentCacheRefresherNotification>
+public sealed class ContentCacheNotificationHandler(IMemoryCache cache, PageCacheToken pageCacheToken): INotificationHandler<ContentCacheRefresherNotification>
 {
     public void Handle(ContentCacheRefresherNotification notification)
     {

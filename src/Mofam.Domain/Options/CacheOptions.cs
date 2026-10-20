@@ -26,8 +26,12 @@ public sealed class CacheOptions
     /// <summary>Startup payload — header, footer and dictionary.</summary>
     public int StartupSeconds { get; set; } = 300;
 
+    /// <summary>The Contact Us admin email and templates. Also cleared when content is published.</summary>
+    public int ContactConfigSeconds { get; set; } = 300;
+
     public TimeSpan SiteRoot => TimeSpan.FromSeconds(SiteRootSeconds);
     public TimeSpan Filters => TimeSpan.FromSeconds(FilterSeconds);
     public TimeSpan Page => TimeSpan.FromSeconds(PageSeconds);
     public TimeSpan Startup => TimeSpan.FromSeconds(StartupSeconds);
+    public TimeSpan ContactConfig => TimeSpan.FromSeconds(ContactConfigSeconds);
 }

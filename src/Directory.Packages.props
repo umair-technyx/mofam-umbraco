@@ -16,6 +16,18 @@
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.13" />
     <PackageVersion Include="Azure.Extensions.AspNetCore.Configuration.Secrets" Version="1.5.2" />
 
+    <!-- Google reCAPTCHA Enterprise -->
+    <PackageVersion Include="Google.Cloud.RecaptchaEnterprise.V1" Version="2.21.0" />
+
+    <!-- Html Sanitizer -->
+    <PackageVersion Include="HtmlSanitizer" Version="9.2.1039" />
+
+    <!-- MailKit -->
+    <PackageVersion Include="MailKit" Version="4.17.0" />
+
+    <!-- SendGrid -->
+    <PackageVersion Include="SendGrid" Version="9.29.3" />
+
     <!-- Media in Azure Blob Storage -->
     <PackageVersion Include="Umbraco.StorageProviders.AzureBlob" Version="17.1.0" />
 

@@ -1,0 +1,21 @@
+{
+  "$schema": "../../../umbraco-package-schema.json",
+  "name": "Mofam Html Preview Editor",
+  "id": "Mofam.HtmlPreviewEditor",
+  "version": "1.0.1",
+  "extensions": [
+    {
+      "type": "propertyEditorUi",
+      "alias": "Mofam.PropertyEditorUi.HtmlPreview",
+      "name": "HTML with Preview",
+      "js": "/App_Plugins/HtmlPreviewEditor/html-preview-editor.js",
+      "elementName": "mofam-html-preview-editor",
+      "meta": {
+        "label": "HTML with Preview",
+        "icon": "icon-code",
+        "group": "common",
+        "propertyEditorSchemaAlias": "Umbraco.Plain.String"
+      }
+    }
+  ]
+}

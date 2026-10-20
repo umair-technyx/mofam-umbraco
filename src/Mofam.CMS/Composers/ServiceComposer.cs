@@ -1,5 +1,7 @@
+using Microsoft.Extensions.Options;
 using Umbraco.Cms.Core.Composing;
 using Mofam.Application.Abstractions;
+using Mofam.Application.Helpers;
 using Mofam.Application.Mapping;
 using Mofam.Application.Services;
 using Mofam.Domain.Options;
@@ -16,19 +18,19 @@ public sealed class ServiceComposer : IComposer
 {
     public void Compose(IUmbracoBuilder builder)
     {
-        builder.Services.AddScoped<IApiService, ApiServcie>();
+        builder.Services.AddScoped<IApiService, ApiService>();
         builder.Services.AddScoped<IStartupService, StartupService>();
         builder.Services.AddScoped<IComponentMapper, ComponentMapper>();
         builder.Services.AddScoped<IPropertyValueMapper, PropertyValueMapper>();
         builder.Services.AddScoped<ICachePolicy, CachePolicy>();
 
         // Singleton: one shared token for all cached pages (cleared on publish).
-        builder.Services.AddSingleton<PageCacheToken>();        builder.Services.AddScoped<ISeoMapper, SeoMapper>();
+        builder.Services.AddSingleton<PageCacheToken>();
+        builder.Services.AddScoped<ISeoMapper, SeoMapper>();
         builder.Services.AddScoped<IPageMapper, PageMapper>();
         builder.Services.AddScoped<ISiteRootResolver, SiteRootResolver>();
         builder.Services.AddScoped<IMediaUrlBuilder, MediaUrlBuilder>();
-        // Required: WebApiController takes ISiteSearchService in its constructor, so
-        // leaving this unregistered breaks every endpoint on that controller, not just search.
+        // Required: SearchController takes ISiteSearchService in its constructor, so it must be registered.
         builder.Services.AddScoped<ISiteSearchService, SiteSearchService>();
         builder.Services.AddScoped<IFilterService, FilterService>();
         builder.Services.AddScoped<ApiKeyAuthFilter>();
@@ -40,12 +42,16 @@ public sealed class ServiceComposer : IComposer
         // Clears the startup and filter caches when content changes, so the CMS changes show at once.
         builder.AddNotificationHandler<ContentCacheRefresherNotification, ContentCacheNotificationHandler>();
 
-        builder.Services.Configure<SecurityOptions>(
-            builder.Config.GetSection(SecurityOptions.SectionName));
+        builder.Services.Configure<SecurityOptions>(builder.Config.GetSection(SecurityOptions.SectionName));
+        builder.Services.Configure<CacheOptions>(builder.Config.GetSection(CacheOptions.SectionName));
+        builder.Services.Configure<EmailSettings>(builder.Config.GetSection(EmailSettings.SectionName));
+        builder.Services.Configure<ReCaptchaOptions>(builder.Config.GetSection(ReCaptchaOptions.SectionName));
 
-        builder.Services.Configure<CacheOptions>(
-            builder.Config.GetSection(CacheOptions.SectionName));
+        builder.Services.AddScoped<IContactEmailConfigMapper, ContactEmailConfigMapper>();
+        builder.Services.AddScoped<IContactService, ContactService>();
+        builder.Services.AddSingleton<IRecaptchaService, RecaptchaService>();
 
-
+        // The send timeout (15 seconds) is set in EmailHelper.
+        builder.Services.AddHttpClient<EmailHelper>();
     }
 }

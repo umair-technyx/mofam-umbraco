@@ -2,15 +2,11 @@ using System.Text.Json;
 using System.Threading.RateLimiting;
 using Azure.Core;
 using Azure.Identity;
-using Azure.Extensions.AspNetCore.Configuration.Secrets;
 using Azure.Storage.Blobs;
-using Umbraco.Cms.Core.DependencyInjection;
 using Umbraco.StorageProviders.AzureBlob.IO;
 using Microsoft.AspNetCore.HttpOverrides;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.ApplicationModels;
-using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.ResponseCompression;
+using Mofam.Application.Helpers;
 using Mofam.Domain.Constants;
 using Mofam.Domain.Models.Common;
 using Mofam.Domain.Options;
@@ -18,7 +14,6 @@ using Mofam.CMS.Pages;
 using Mofam.CMS.Security;
 using Mofam.Infrastructure.HealthChecks;
 using Mofam.Infrastructure.Middleware;
-using Mofam.Infrastructure.Routing;
 using Mofam.Infrastructure.Services;
 
 const string CorsPolicyName = "ConfiguredOrigins";
@@ -59,46 +54,77 @@ var rateLimitOptions = new RateLimitOptions();
 rateLimitSection.Bind(rateLimitOptions);
 
 if (rateLimitOptions.PermitLimit <= 0 || rateLimitOptions.WindowSeconds <= 0
-    || rateLimitOptions.SignInPermitLimit <= 0 || rateLimitOptions.SignInWindowSeconds <= 0)
+    || rateLimitOptions.SignInPermitLimit <= 0 || rateLimitOptions.SignInWindowSeconds <= 0
+    || rateLimitOptions.FormPermitLimit <= 0 || rateLimitOptions.FormWindowSeconds <= 0)
 {
     throw new InvalidOperationException(
-        $"Invalid '{RateLimitOptions.SectionName}' configuration — PermitLimit, WindowSeconds, SignInPermitLimit and SignInWindowSeconds must be greater than 0.");
+        $"Invalid '{RateLimitOptions.SectionName}' configuration — PermitLimit, WindowSeconds, SignInPermitLimit, SignInWindowSeconds, FormPermitLimit and FormWindowSeconds must be greater than 0.");
 }
 
-// The sign in pages are open to everyone, so they have their own limit per client address.
-var entraSettings = builder.Configuration.GetSection(EntraBackOfficeOptions.SectionName).Get<EntraBackOfficeOptions>()
-                    ?? new EntraBackOfficeOptions();
-string[] signInPaths = [entraSettings.CallbackPath, entraSettings.SignedOutCallbackPath, GeneralConstants.SignInErrorPath];
+var entraSettings = builder.Configuration.GetSection(EntraBackOfficeOptions.SectionName).Get<EntraBackOfficeOptions>() ?? new EntraBackOfficeOptions();
+string[] signInPaths = [entraSettings.CallbackPath.Trim(), entraSettings.SignedOutCallbackPath.Trim(), GeneralConstants.SignInErrorPath];
 
 builder.Services.AddRateLimiter(rateLimiterOptions =>
 {
     rateLimiterOptions.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
     rateLimiterOptions.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(http =>
-        signInPaths.Any(path => http.Request.Path.Equals(path, StringComparison.OrdinalIgnoreCase))
+    {
+        var clientIp = http.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+        if (http.Request.Path.StartsWithSegments("/api/web/form", StringComparison.OrdinalIgnoreCase))
+        {
+            var formName = http.Request.Path.Value!.TrimEnd('/').Split('/').Last().ToLowerInvariant();
+            if (!GeneralConstants.FormNames.Contains(formName)) formName = "other";
+
+            return RateLimitPartition.GetFixedWindowLimiter(
+                $"form:{formName}:{clientIp}",
+                _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = rateLimitOptions.FormPermitLimit,
+                    Window = TimeSpan.FromSeconds(rateLimitOptions.FormWindowSeconds),
+                    QueueLimit = 0,
+                });
+        }
+
+        if (rateLimitOptions.Enabled && http.Request.Path.StartsWithSegments("/api/web", StringComparison.OrdinalIgnoreCase))
+        {
+            return RateLimitPartition.GetFixedWindowLimiter(
+                $"api:{clientIp}",
+                _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = rateLimitOptions.PermitLimit,
+                    Window = TimeSpan.FromSeconds(rateLimitOptions.WindowSeconds),
+                    QueueLimit = 0,
+                });
+        }
+
+        return signInPaths.Any(signInPath => http.Request.Path.Equals(signInPath, StringComparison.OrdinalIgnoreCase))
             ? RateLimitPartition.GetFixedWindowLimiter(
-                http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                $"signin:{clientIp}",
                 _ => new FixedWindowRateLimiterOptions
                 {
                     PermitLimit = rateLimitOptions.SignInPermitLimit,
                     Window = TimeSpan.FromSeconds(rateLimitOptions.SignInWindowSeconds),
                     QueueLimit = 0,
                 })
-            : RateLimitPartition.GetNoLimiter("other"));
-
-    rateLimiterOptions.AddFixedWindowLimiter("api", limiterOptions =>
-    {
-        limiterOptions.PermitLimit = rateLimitOptions.PermitLimit;
-        limiterOptions.Window = TimeSpan.FromSeconds(rateLimitOptions.WindowSeconds);
-        limiterOptions.QueueLimit = 0;
+            : RateLimitPartition.GetNoLimiter("other");
     });
 
     rateLimiterOptions.OnRejected = async (context, cancellationToken) =>
     {
         context.HttpContext.Response.ContentType = "application/json";
 
-        var response = ApiResponse<object>.TooManyRequests("Rate limit exceeded. Please try again later.");
-        await context.HttpContext.Response.WriteAsync(JsonSerializer.Serialize(response), cancellationToken);
+        if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+        {
+            context.HttpContext.Response.Headers.RetryAfter = ((int)Math.Ceiling(retryAfter.TotalSeconds)).ToString();
+        }
+
+        // Written to the log (Information, not Warning: an attack would send one Sentry event for each rejected request).
+        LoggingService.AppLogger.Information("Rate limit exceeded. Path={Path}, RemoteIp={RemoteIp}", context.HttpContext.Request.Path, context.HttpContext.Connection.RemoteIpAddress);
+
+        var response = ApiResponse<object>.TooManyRequests("Rate limit exceeded. Please try again later.") with { TraceId = context.HttpContext.TraceIdentifier };
+        await context.HttpContext.Response.WriteAsync(JsonSerializer.Serialize(response, ApiJson.Options), cancellationToken);
     };
 });
 
@@ -113,11 +139,6 @@ builder.Services.AddCors(corsBuilder =>
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
-});
-
-builder.WebHost.ConfigureKestrel(kestrelOptions =>
-{
-    kestrelOptions.Limits.MaxRequestBodySize = 5 * 1024 * 1024; // 5 MB
 });
 
 var allowedHosts = (builder.Configuration["AllowedHosts"] ?? string.Empty).Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -137,11 +158,6 @@ builder.Services.Configure<ForwardedHeadersOptions>(forwardedOptions =>
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<SignInErrorToken>();
 builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck>("database");
-
-builder.Services.Configure<MvcOptions>(options =>
-{
-    options.Conventions.Add(new RouteTokenTransformerConvention(new SlugifyParameterTransformer()));
-});
 
 builder.Services.AddResponseCompression(options =>
 {
@@ -169,26 +185,33 @@ umbracoBuilder
     .AddComposers()
     .Build();
 
+// Umbraco replaced the injected Serilog logger with its own. This registers our logger again (it must stay after the Umbraco builder),
+// so the code of the project writes to the "logs" container and to Sentry.
+builder.Services.AddSingleton<Serilog.ILogger>(_ => LoggingService.AppLogger);
+FunctionTracer.Logger = LoggingService.AppLogger;
+
 WebApplication app = builder.Build();
 
 await app.BootUmbracoAsync();
 
-// First, so everything after it sees the real scheme and host.
 app.UseForwardedHeaders();
 
 app.UseResponseCompression();
 
 app.UseMiddleware<GlobalExceptionMiddleware>();
+
+app.UseHttpsRedirection();
+
+// CORS and the rate limit run before the API checks, so a limited request is refused without its body being read, and every refusal has the CORS headers.
+app.UseCors(CorsPolicyName);
+app.UseRateLimiter();
+
 app.UseWhen(ctx => ctx.Request.Path.StartsWithSegments("/api"), branch =>
 {
     branch.UseMiddleware<NotFoundNormalizationMiddleware>();
     branch.UseMiddleware<ApiValidationMiddleware>();
     branch.UseMiddleware<XssSanitizationMiddleware>();
 });
-
-app.UseHttpsRedirection();
-app.UseCors(CorsPolicyName);
-app.UseRateLimiter();
 
 app.Use(async (http, next) =>
 {
@@ -197,7 +220,6 @@ app.Use(async (http, next) =>
         && http.RequestServices.GetRequiredService<SignInErrorToken>()
             .TryRead(http.Request.Query[GeneralConstants.SignInErrorTokenQuery], out var reason, out var reference))
     {
-        // The page must not be cached, shown in another site, or sent as a referrer (the address has a token).
         http.Response.Headers.CacheControl = "no-store";
         http.Response.Headers.XFrameOptions = "DENY";
         http.Response.Headers.XContentTypeOptions = "nosniff";

@@ -10,19 +10,9 @@ using Serilog;
 
 namespace Mofam.Application.Notifications;
 
-/// <summary>
-/// Normalises the slug and enforces uniqueness per content type, at save time.
-/// <para>
-/// The API resolves detail pages by the editor-controlled <c>slug</c> property, and
-/// Umbraco enforces nothing on a custom text field. Without this, two services can share
-/// a slug and the API silently serves whichever it finds first.
-/// </para>
-/// <para>
-/// Uses <see cref="ContentSavingNotification"/> rather than a *Saved* notification because
-/// only the "-ing" notifications can be cancelled, which is what shows the editor an error
-/// instead of letting a bad value through.
-/// </para>
-/// </summary>
+// Cleans the slug and makes it unique for each content type, when the editor saves.
+// The API finds detail pages by the slug property, and Umbraco does not check it, so two nodes could share a slug.
+// This uses the "Saving" notification because only it can be cancelled, which shows the editor an error.
 public sealed class SlugNotificationHandler(
     IContentService contentService,
     IContentTypeService contentTypeService,
@@ -38,10 +28,8 @@ public sealed class SlugNotificationHandler(
             var contentType = contentTypeService.Get(entity.ContentType.Alias);
             if (contentType is null) continue;
 
-            // Variance is a property-level setting, not a document-level one: a doc type
-            // can vary by culture while an individual property stays shared. SetValue
-            // validates against the property, so asking the doc type throws
-            // NotSupportedException on a shared slug under a variant doc type.
+            // Whether a value varies by culture is set on the property, not on the document type,
+            // so the slug property is checked here.
             var slugPropertyType = contentType.CompositionPropertyTypes
                 .FirstOrDefault(pt => pt.Alias == CmsConstants.Fields.Slug);
             if (slugPropertyType is null) continue;
@@ -57,7 +45,7 @@ public sealed class SlugNotificationHandler(
         }
     }
 
-    /// <summary>Returns false when the save was cancelled.</summary>
+    // Returns false when the save was cancelled.
     private bool Apply(
         IContent entity,
         IContentType contentType,
@@ -66,9 +54,7 @@ public sealed class SlugNotificationHandler(
     {
         var raw = entity.GetValue<string>(CmsConstants.Fields.Slug, culture);
 
-        // Empty slug: fall back to the node name so editors are not forced to type it
-        // twice. Only the API depends on this value, so a sensible default is safer
-        // than blocking the save.
+        // An empty slug is made from the node name, so the editor does not have to type it twice.
         var source = string.IsNullOrWhiteSpace(raw)
             ? entity.GetCultureName(culture) ?? entity.Name
             : raw;
@@ -90,8 +76,7 @@ public sealed class SlugNotificationHandler(
             return false;
         }
 
-        // Write back only when normalisation changed something, so untouched content
-        // is not marked dirty on every save.
+        // The value is written back only when it changed, so the content is not marked as edited on every save.
         if (!string.Equals(raw, slug, StringComparison.Ordinal))
         {
             entity.SetValue(CmsConstants.Fields.Slug, slug, culture);
@@ -104,11 +89,8 @@ public sealed class SlugNotificationHandler(
         return true;
     }
 
-    /// <summary>
-    /// Returns the item already holding this slug, or null when it is free. Compares
-    /// against the same content type only — a page and a service may share a slug
-    /// because they are reached through different URLs.
-    /// </summary>
+    // Gives the node that already has this slug, or null. Only the same content type is checked,
+    // because a page and a service may share a slug (their URLs are different).
     private IContent? FindConflict(IContent entity, int contentTypeId, string slug, string? culture)
     {
         const int pageSize = 200;
@@ -123,7 +105,7 @@ public sealed class SlugNotificationHandler(
 
             foreach (var other in batch)
             {
-                // Same node being re-saved is not a conflict.
+                // The same node being saved again is not a conflict.
                 if (other.Id == entity.Id || other.Key == entity.Key) continue;
                 if (other.Trashed) continue;
 

@@ -13,7 +13,17 @@ public sealed class NotFoundNormalizationMiddleware(RequestDelegate next)
         await using var buffer = new MemoryStream();
         context.Response.Body = buffer;
 
-        await next(context);
+        try
+        {
+            await next(context);
+        }
+        catch
+        {
+            // The real body is put back before the exception moves on. Otherwise the exception middleware would write
+            // into the buffer that is disposed here, and the client would get an empty 500 instead of the error response.
+            context.Response.Body = originalBody;
+            throw;
+        }
 
         if (context.Response.StatusCode == StatusCodes.Status404NotFound && buffer.Length == 0)
         {
@@ -25,7 +35,7 @@ public sealed class NotFoundNormalizationMiddleware(RequestDelegate next)
                 TraceId = context.TraceIdentifier,
             };
 
-            var bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(response));
+            var bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(response, ApiJson.Options));
             context.Response.ContentType = "application/json";
             context.Response.ContentLength = null;
             await originalBody.WriteAsync(bytes);

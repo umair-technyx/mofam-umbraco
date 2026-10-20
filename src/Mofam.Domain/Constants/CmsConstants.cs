@@ -20,16 +20,10 @@ public static class CmsConstants
         public const string ServiceCategory = "serviceCategory";
         public const string ServiceCategories = "serviceCategories";
         public const string Categories = "categories";
+        public const string ContactUsFormSettings = "contactUsFormSettings";
+        public const string ContactEmailTemplate = "contactEmailTemplate";
 
-        /// <summary>
-        /// Content types with their own detail page — independently routable, reached via
-        /// <c>IPageMapper</c>'s Detail mode when requested directly by slug. This is what
-        /// separates a genuine page reference from a reusable component-library node
-        /// (e.g. <c>startingPointsGrid</c>, picked via the <c>components</c> property)
-        /// wherever the same content shows up picked inside another page or component:
-        /// a page type is shaped as a listing reference; anything else picked is rendered
-        /// in full, exactly like an authored Block List element.
-        /// </summary>
+        // Content types with their own detail page (reached by slug). Any other type picked inside a page is shown in full.
         public static readonly string[] PageTypes = [Page, Service, ServiceCategory];
     }
 
@@ -37,38 +31,22 @@ public static class CmsConstants
     {
         public const string English = "en";
         public const string Arabic = "ar";
-
         public static readonly string[] All = [English, Arabic];
-
-        // Returns the supported culture in its standard form ("EN" -> "en"), or null if unsupported.
-        public static string? Resolve(string? culture) =>
-            All.FirstOrDefault(c => string.Equals(c, culture, StringComparison.OrdinalIgnoreCase));
+        public static string? Resolve(string? culture) => All.FirstOrDefault(c => string.Equals(c, culture, StringComparison.OrdinalIgnoreCase));
     }
 
     public static class Fields
     {
         public const string Components = "components";
-
-        /// <summary>
-        /// Editor-controlled URL segment. Note this is a custom property, not Umbraco's
-        /// generated <c>UrlSegment</c> — page lookups match on this value.
-        /// </summary>
         public const string Slug = "slug";
-
         public const string Title = "title";
         public const string Categories = "categories";
-
-        /// <summary>
-        /// Components rendered only on a detail page. Excluded from listing/search
-        /// responses, which never render them.
-        /// </summary>
         public const string DetailPageComponents = "detailPageComponents";
+        public const string EmailSubject = "emailSubject";
+        public const string AdminEmailHtml = "adminEmailHtml";
+        public const string AdminEmail = "adminEmail";
     }
 
-    /// <summary>
-    /// Properties from the metaTags composition. Any content type composed with it
-    /// exposes these, so the SEO block is built the same way for every page type.
-    /// </summary>
     public static class SeoFields
     {
         public const string MetaTitle = "metaTitle";
@@ -102,10 +80,7 @@ public static class CmsConstants
         public const string CustomChangeFrequency = "customchangeFrequency";
         public const string LastUpdatedDate = "lastUpdatedDate";
 
-        /// <summary>
-        /// Every SEO alias, so listing responses can exclude them in one step. SEO is
-        /// only meaningful on a detail page.
-        /// </summary>
+        // Every SEO alias, so listing responses can leave them out in one step (SEO is only for a detail page).
         public static readonly string[] All =
         [
             MetaTitle, MetaDescription, MetaKeywords, MetaCanonicalLink, MetaSchemaJson,
@@ -117,7 +92,6 @@ public static class CmsConstants
         ];
     }
 
-    /// <summary>Properties on the site root, grouped by the tab they sit under.</summary>
     public static class SiteFields
     {
         // Header Content tab
