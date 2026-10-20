@@ -10,10 +10,13 @@ public sealed class FunctionTracer : IDisposable
     private readonly bool _loginfile;
     private readonly ILogger _logger;
 
+    // The logger of the project (logs container and Sentry). Program.cs sets it after Umbraco has replaced Log.Logger.
+    public static ILogger? Logger { get; set; }
+
     public FunctionTracer(bool loginfile = false, string alias = "")
     {
         _loginfile = loginfile;
-        _logger = Log.Logger;
+        _logger = Logger ?? Log.Logger;
 
         if (!_loginfile) return;
 

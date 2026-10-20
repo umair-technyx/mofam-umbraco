@@ -1,8 +1,5 @@
 namespace Mofam.Domain.Options;
 
-// Settings for signing in to the Umbraco backoffice with Microsoft Entra ID (Azure AD).
-// Secrets (TenantId, ClientId, ClientSecret) must not be in git. Use appsettings.Development.json locally,
-// and Key Vault or server settings on a server.
 public sealed class EntraBackOfficeOptions
 {
     public const string SectionName = "BackOfficeEntraId";

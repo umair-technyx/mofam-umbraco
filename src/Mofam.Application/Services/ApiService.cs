@@ -15,7 +15,7 @@ using Umbraco.Extensions;
 
 namespace Mofam.Application.Services;
 
-public sealed class ApiServcie(
+public sealed class ApiService(
     IExamineManager examineManager,
     IPublishedContentQuery contentQuery,
     IPageMapper pageMapper,

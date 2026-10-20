@@ -1,9 +1,11 @@
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Options;
 using Mofam.Domain.Constants;
+using Mofam.Domain.Models.Common;
 using Mofam.Domain.Options;
 
 namespace Mofam.Infrastructure.Filters;
@@ -16,7 +18,7 @@ public sealed class ApiKeyAuthFilter(IOptions<SecurityOptions> options, Serilog.
 
         if (string.IsNullOrEmpty(expectedKey))
         {
-            context.Result = new ObjectResult("API key not configured.") { StatusCode = 500 };
+            context.Result = new ObjectResult(ApiResponse<object>.InternalServerError("API key not configured.") with { TraceId = context.HttpContext.TraceIdentifier }) { StatusCode = StatusCodes.Status500InternalServerError };
             return;
         }
 
@@ -30,7 +32,7 @@ public sealed class ApiKeyAuthFilter(IOptions<SecurityOptions> options, Serilog.
                 context.HttpContext.Request.Path,
                 context.HttpContext.Connection.RemoteIpAddress);
 
-            context.Result = new UnauthorizedObjectResult("Invalid or missing API key.");
+            context.Result = new UnauthorizedObjectResult(ApiResponse<object>.Unauthorized("Invalid or missing API key.") with { TraceId = context.HttpContext.TraceIdentifier });
             return;
         }
 

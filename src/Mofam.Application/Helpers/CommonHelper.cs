@@ -1,55 +1,85 @@
+using System.ComponentModel.DataAnnotations;
+using System.Net;
+using System.Text.RegularExpressions;
+using Ganss.Xss;
+using Mofam.Domain.Constants;
 using Umbraco.Cms.Core.Strings;
 
 namespace Mofam.Application.Helpers;
-
-/// <summary>
-/// Pure, stateless helpers shared across the application layer.
-/// <para>
-/// Anything here must be a genuine cross-cutting utility with no state and no I/O.
-/// Logic that belongs to one feature belongs with that feature, not in this class —
-/// keep dependencies as parameters so callers stay in control of what they inject.
-/// </para>
-/// </summary>
-public static class CommonHelper
+public static partial class CommonHelper
 {
-    /// <summary>
-    /// The single definition of what a slug looks like.
-    /// <para>
-    /// Both ends of the slug contract have to agree: the save-time handler that writes
-    /// the stored value, and the API that matches an incoming request against it. When
-    /// the two drift apart, content that saves cleanly stops resolving — the stored slug
-    /// and the requested slug get normalised by different rules and never compare equal.
-    /// </para>
-    /// <para>
-    /// Takes <see cref="IShortStringHelper"/> as a parameter rather than being wrapped in
-    /// an injected service, matching how Umbraco shapes its own equivalents
-    /// (<c>StringExtensions.ToUrlSegment</c>, <c>ToSafeAlias</c>).
-    /// </para>
-    /// </summary>
-    /// <returns>
-    /// The canonical form of <paramref name="value"/>, or null when nothing usable is
-    /// left after cleaning.
-    /// </returns>
+    #region Email
+
+    [GeneratedRegex(GeneralConstants.EmailPattern, RegexOptions.None, matchTimeoutMilliseconds: 100)]
+    private static partial Regex EmailRegex();
+    public static bool IsValidEmail(string? value) => !IsBlank(value) && new EmailAddressAttribute().IsValid(value) && Matches(EmailRegex(), value!);
+    private static bool Matches(Regex pattern, string value)
+    {
+        try
+        {
+            return pattern.IsMatch(value);
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return false;
+        }
+    }
+
+    #endregion
+
+    #region Text
+
+    public static bool IsBlank(string? value) => string.IsNullOrWhiteSpace(value);
+    public static bool HasLineBreak(string? value) => value is not null && value.Any(c => char.IsControl(c) || c is (char)0x2028 or (char)0x2029);
+
+    private const char LineFeed = (char)10;
+    private const char CarriageReturn = (char)13;
+
+    // One sanitizer for each thread, because a sanitizer is not safe to share. Nothing is allowed, so every tag is removed.
+    private static readonly ThreadLocal<HtmlSanitizer> PlainTextSanitizer = new(() =>
+    {
+        var sanitizer = new HtmlSanitizer();
+        sanitizer.AllowedTags.Clear();
+        sanitizer.AllowedAttributes.Clear();
+        sanitizer.AllowedCssProperties.Clear();
+        sanitizer.AllowedSchemes.Clear();
+        sanitizer.KeepChildNodes = true; // the text inside a removed tag stays
+        return sanitizer;
+    });
+
+    // Removes all HTML tags and scripts and returns the plain text. Line breaks are made the same (one line feed).
+    public static string StripHtml(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+
+        // The sanitizer gives HTML text (for example &amp;), so it is turned back into plain text.
+        var text = WebUtility.HtmlDecode(PlainTextSanitizer.Value!.Sanitize(value));
+
+        return text.Replace(CarriageReturn.ToString() + LineFeed, LineFeed.ToString()).Replace(CarriageReturn, LineFeed);
+    }
+
+    #endregion
+
+    #region Slug
+
+    // One slug rule for saving and for the API lookup, so they always match. Returns null when nothing is left.
     public static string? NormaliseSlug(string? value, IShortStringHelper shortStringHelper)
     {
-        // Editors paste slugs with stray slashes and whitespace, so "/About Us/" and
-        // "about-us" have to collapse to the same thing on both sides.
+        // "/About Us/" and "about-us" must become the same.
         var trimmed = value?.Trim().Trim('/').Trim();
         if (string.IsNullOrEmpty(trimmed)) return null;
 
         var cleaned = shortStringHelper.CleanStringForUrlSegment(trimmed);
 
-        // CleanStringForUrlSegment returns empty for scripts it does not transliterate,
-        // Arabic among them; keep the editor's own value rather than wiping it.
+        // Umbraco returns empty for Arabic, so the editor's own value is kept.
         return string.IsNullOrWhiteSpace(cleaned) ? trimmed.ToLowerInvariant() : cleaned;
     }
 
-    /// <summary>
-    /// Umbraco indexes a culture-variant property as <c>alias_culture</c> and an invariant
-    /// one as plain <c>alias</c>. Which applies depends on how the doctype is configured,
-    /// so both names are queried — shared by every Examine lookup (search and the
-    /// slug-based page lookup alike) so they can't drift apart on this rule.
-    /// </summary>
+    #endregion
+
+    #region Examine culture
+
+    // Examine uses "alias_culture" for variant properties and "alias" for invariant ones, so both are queried.
     public static string[] ExpandForCulture(string[] aliases, string? culture)
     {
         if (string.IsNullOrWhiteSpace(culture)) return aliases;
@@ -64,4 +94,6 @@ public static class CommonHelper
 
         return [.. expanded];
     }
+
+    #endregion
 }

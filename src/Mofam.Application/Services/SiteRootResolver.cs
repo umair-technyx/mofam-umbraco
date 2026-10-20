@@ -43,6 +43,12 @@ public sealed class SiteRootResolver(
         return FindRoot(rootAlias);
     }
 
+    // The Umbraco 17 replacement of Children is tracked with the note below.
+#pragma warning disable CS0618
+    public IPublishedContent? FindChild(IPublishedContent root, string contentTypeAlias) =>
+        root.Children.FirstOrDefault(child => child.ContentType.Alias == contentTypeAlias);
+#pragma warning restore CS0618
+
     // Channel roots normally sit one level under the content root, but tolerate them
     // being at the very top too.
     //

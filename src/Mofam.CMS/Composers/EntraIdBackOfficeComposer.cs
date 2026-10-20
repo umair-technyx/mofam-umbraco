@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Mofam.CMS.Security;
-using Serilog;
+using Mofam.Infrastructure.Services;
 using Mofam.Domain.Constants;
 using Mofam.Domain.Options;
 using Umbraco.Cms.Api.Management.Security;
@@ -50,7 +50,7 @@ public sealed class EntraIdBackOfficeComposer : IComposer
 
         if (missing.Count > 0)
         {
-            Log.Error(
+            LoggingService.AppLogger.Error(
                 "BackOfficeEntraId is enabled but these settings are empty: {Missing}. The Microsoft login will not work until they are set.",
                 string.Join(", ", missing));
         }
@@ -71,19 +71,20 @@ public sealed class EntraIdBackOfficeComposer : IComposer
             logins.AddBackOfficeLogin(
                 backOffice => backOffice.AddOpenIdConnect(scheme, options =>
                 {
+                    // Spaces around the values (easy to add by mistake in Key Vault) are removed where they are used.
                     // The tenant address. {TenantId} is replaced with the tenant id.
-                    options.Authority = settings.Authority.Replace("{TenantId}", settings.TenantId);
+                    options.Authority = settings.Authority.Trim().Replace("{TenantId}", settings.TenantId.Trim());
                     // An empty ClientId breaks every request, so a placeholder is used. The error is in the log.
-                    options.ClientId = string.IsNullOrWhiteSpace(settings.ClientId) ? "not-configured" : settings.ClientId;
-                    options.ClientSecret = settings.ClientSecret;
+                    options.ClientId = string.IsNullOrWhiteSpace(settings.ClientId) ? "not-configured" : settings.ClientId.Trim();
+                    options.ClientSecret = settings.ClientSecret.Trim();
 
                     // Must match a redirect URI in Azure.
-                    options.CallbackPath = settings.CallbackPath;
-                    options.SignedOutCallbackPath = settings.SignedOutCallbackPath;
+                    options.CallbackPath = settings.CallbackPath.Trim();
+                    options.SignedOutCallbackPath = settings.SignedOutCallbackPath.Trim();
 
                     // Always the code flow with PKCE.
                     options.ResponseType = OpenIdConnectResponseType.Code;
-                    options.ResponseMode = settings.ResponseMode;
+                    options.ResponseMode = settings.ResponseMode.Trim();
                     options.UsePkce = true;
                     options.MapInboundClaims = false;
                     // Tokens are not saved, we only need to know who the user is.

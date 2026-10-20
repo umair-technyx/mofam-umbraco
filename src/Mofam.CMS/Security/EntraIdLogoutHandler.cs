@@ -40,7 +40,8 @@ public sealed class EntraIdLogoutHandler(
 
             // Microsoft sends the user back here after sign out. It must be a redirect URI in Azure.
             // The configured application url is used if set, so a request header cannot change it.
-            var applicationUrl = configuration["Umbraco:CMS:WebRouting:UmbracoApplicationUrl"];
+            // Spaces around the value (easy to add by mistake in Key Vault) are removed.
+            var applicationUrl = configuration["Umbraco:CMS:WebRouting:UmbracoApplicationUrl"]?.Trim();
             var origin = !string.IsNullOrWhiteSpace(applicationUrl)
                 ? applicationUrl.TrimEnd('/')
                 : $"{http.Request.Scheme}://{http.Request.Host}";

@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.RateLimiting;
 using Mofam.Application.IServices;
 using Mofam.Domain.Constants;
 using Mofam.Domain.Models.Common;
@@ -12,10 +11,8 @@ namespace Mofam.CMS.Controllers.Web;
 [ApiController]
 [Route("api/web")]
 [ServiceFilter(typeof(ApiKeyAuthFilter))]
-[EnableRateLimiting("api")]
 public sealed class SearchController(ISiteSearchService searchService) : ControllerBase
 {
-    // Content search using Examine. Paging and sorting are done in the index.
     [HttpPost("search")]
     public ActionResult<ApiResponse<SearchResultsDto>> Search([FromBody] SearchRequest request)
     {
@@ -24,7 +21,6 @@ public sealed class SearchController(ISiteSearchService searchService) : Control
             return BadRequest(ApiResponse<SearchResultsDto>.BadRequest("A search request body is required."));
         }
 
-        // An unknown culture is rejected, and "EN" / "en" become the same value. No culture means invariant search.
         if (!string.IsNullOrWhiteSpace(request.Culture))
         {
             var supported = CmsConstants.Cultures.Resolve(request.Culture.Trim());

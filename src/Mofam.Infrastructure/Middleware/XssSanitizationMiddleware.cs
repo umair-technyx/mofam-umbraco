@@ -10,7 +10,11 @@ public sealed class XssSanitizationMiddleware(RequestDelegate next)
 
     public async Task InvokeAsync(HttpContext context)
     {
+        // The forms (/api/web/form/...) are not checked here: their service removes the HTML and encodes the text, and this check can refuse normal messages.
+        var isForm = context.Request.Path.StartsWithSegments("/api/web/form", StringComparison.OrdinalIgnoreCase);
+
         var isJsonBodyRequest =
+            !isForm &&
             BodyMethods.Contains(context.Request.Method, StringComparer.OrdinalIgnoreCase) &&
             (context.Request.ContentType?.Contains("application/json", StringComparison.OrdinalIgnoreCase) ?? false);
 
@@ -32,7 +36,7 @@ public sealed class XssSanitizationMiddleware(RequestDelegate next)
                         context.Response.StatusCode = StatusCodes.Status400BadRequest;
                         context.Response.ContentType = "application/json";
                         var response = ApiResponse<object>.BadRequest("Request rejected: malicious input detected.");
-                        await context.Response.WriteAsync(JsonSerializer.Serialize(response));
+                        await context.Response.WriteAsync(JsonSerializer.Serialize(response, ApiJson.Options));
                         return;
                     }
                 }
