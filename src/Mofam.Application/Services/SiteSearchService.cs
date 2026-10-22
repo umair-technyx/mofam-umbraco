@@ -45,6 +45,11 @@ public sealed class SiteSearchService(
         try
         {
             var query = BuildQuery(index.Searcher, request, contentTypes);
+            if (query is null)
+            {
+                // A filter had only values that are not GUIDs, so nothing can match it.
+                return SearchResultsDto.Empty(pageNumber, pageSize);
+            }
 
             // Paging happens in Lucene, not in memory — the whole point of using the index.
             var skip = (int)skipLong;
@@ -94,7 +99,7 @@ public sealed class SiteSearchService(
             : null;
     }
 
-    private IBooleanOperation BuildQuery(
+    private IBooleanOperation? BuildQuery(
         ISearcher searcher,
         SearchRequest request,
         string[] contentTypes)
@@ -129,7 +134,10 @@ public sealed class SiteSearchService(
                 var clean = values?.Where(v => !string.IsNullOrWhiteSpace(v)).ToArray() ?? [];
                 if (string.IsNullOrWhiteSpace(field) || clean.Length == 0) continue;
 
-                op = op.And().GroupedOr(CommonHelper.ExpandForCulture([field], request.Culture), FilterValues(clean));
+                var guids = FilterValues(clean);
+                if (guids.Length == 0) return null;
+
+                op = op.And().GroupedOr(CommonHelper.ExpandForCulture([field], request.Culture), guids);
             }
         }
 
@@ -142,17 +150,14 @@ public sealed class SiteSearchService(
     /// UDI into the tokens "umb", "document" and the dash-less GUID, so a GUID is queried only as that
     /// dash-less token. Querying the UDI or the dashed GUID would be split too, and "umb" and "document"
     /// are in every item, so the filter would match everything.
+    /// Values that are not a GUID are dropped for the same reason (for example "document" would match everything).
     /// </summary>
     private static string[] FilterValues(string[] values)
     {
-        var result = new List<string>(values.Length);
-
-        foreach (var value in values)
-        {
-            result.Add(Guid.TryParse(value, out var guid) ? guid.ToString("N") : value);
-        }
-
-        return [.. result.Distinct(StringComparer.OrdinalIgnoreCase)];
+        return [.. values
+            .Select(v => Guid.TryParse(v?.Trim(), out var guid) ? guid.ToString("N") : null)
+            .OfType<string>()
+            .Distinct()];
     }
 
 
