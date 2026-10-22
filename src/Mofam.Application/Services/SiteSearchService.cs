@@ -138,18 +138,22 @@ public sealed class SiteSearchService(
 
     /// <summary>
     /// The filters endpoint hands out node keys as plain GUIDs, but Examine stores picker
-    /// values as UDIs — <c>umb://document/6395c1e5792e407f804a28bdd3972439</c>. The index splits a
-    /// UDI into the tokens "umb", "document" and the dash-less GUID, so a GUID is queried only as that
-    /// dash-less token. Querying the UDI or the dashed GUID would be split too, and "umb" and "document"
-    /// are in every item, so the filter would match everything.
+    /// values as UDIs — <c>umb://document/6395c1e5792e407f804a28bdd3972439</c>. Both the
+    /// UDI and its dash-less GUID token are queried so the round-trip matches.
     /// </summary>
     private static string[] FilterValues(string[] values)
     {
-        var result = new List<string>(values.Length);
+        var result = new List<string>(values.Length * 3);
 
         foreach (var value in values)
         {
-            result.Add(Guid.TryParse(value, out var guid) ? guid.ToString("N") : value);
+            result.Add(value);
+
+            if (Guid.TryParse(value, out var guid))
+            {
+                result.Add(new GuidUdi(Umbraco.Cms.Core.Constants.UdiEntityType.Document, guid).ToString());
+                result.Add(guid.ToString("N"));
+            }
         }
 
         return [.. result.Distinct(StringComparer.OrdinalIgnoreCase)];
