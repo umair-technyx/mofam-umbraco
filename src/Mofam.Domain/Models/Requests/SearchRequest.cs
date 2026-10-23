@@ -1,5 +1,8 @@
+using System.Text.Json.Serialization;
+
 namespace Mofam.Domain.Models.Requests;
 
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record SearchRequest
 {
     /// <summary>Free-text term. When empty the query returns everything matching the filters.</summary>
