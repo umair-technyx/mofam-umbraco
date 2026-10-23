@@ -11,16 +11,12 @@ namespace Mofam.CMS.Controllers.Web;
 [ApiController]
 [Route("api/web")]
 [ServiceFilter(typeof(ApiKeyAuthFilter))]
+[ApiResponseValidationFilter]
 public sealed class SearchController(ISiteSearchService searchService) : ControllerBase
 {
     [HttpPost("search")]
     public ActionResult<ApiResponse<SearchResultsDto>> Search([FromBody] SearchRequest request)
     {
-        if (request is null)
-        {
-            return BadRequest(ApiResponse<SearchResultsDto>.BadRequest("A search request body is required."));
-        }
-
         if (!string.IsNullOrWhiteSpace(request.Culture))
         {
             var supported = CmsConstants.Cultures.Resolve(request.Culture.Trim());

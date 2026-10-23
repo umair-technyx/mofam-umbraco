@@ -30,6 +30,7 @@ public static class SearchConstants
     public static readonly string[] AllowedContentTypes =
     [
         CmsConstants.ContentTypes.Service,
+        CmsConstants.ContentTypes.Resource,
     ];
 
     // Allowed page size for a search. A value outside this range is moved into it.
