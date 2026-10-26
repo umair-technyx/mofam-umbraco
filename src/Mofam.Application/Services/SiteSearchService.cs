@@ -122,7 +122,10 @@ public sealed class SiteSearchService(
 
         if (!string.IsNullOrWhiteSpace(request.Query) && SearchConstants.SearchableFields.Length > 0)
         {
-            var term = request.Query.Trim().ToLowerInvariant();
+            // * and ? are Lucene wildcards: a leading one is a parse error, so they are not part of the search text.
+            var term = request.Query.Replace("*", "").Replace("?", "").Trim().ToLowerInvariant();
+            if (term.Length == 0) return null;
+
             op = op.And().GroupedOr(CommonHelper.ExpandForCulture(SearchConstants.SearchableFields, request.Culture),
                                     term.MultipleCharacterWildcard());
         }

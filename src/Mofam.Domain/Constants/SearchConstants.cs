@@ -35,7 +35,7 @@ public static class SearchConstants
 
     // Allowed page size for a search. A value outside this range is moved into it.
     public const int MinPageSize = 1;
-    public const int MaxPageSize = 500;
+    public const int MaxPageSize = 50;
 
     #endregion
 
