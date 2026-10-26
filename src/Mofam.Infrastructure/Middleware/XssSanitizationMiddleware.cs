@@ -44,6 +44,15 @@ public sealed class XssSanitizationMiddleware(RequestDelegate next)
                 {
                     // Malformed JSON — ApiValidationMiddleware/model binding handles this, so we can ignore it here.
                 }
+                catch (RegexMatchTimeoutException)
+                {
+                    // A body that takes this long to check is not a normal request: refuse it as a 400, not a 500.
+                    context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                    context.Response.ContentType = "application/json";
+                    var response = ApiResponse<object>.BadRequest("Request rejected: malicious input detected.");
+                    await context.Response.WriteAsync(JsonSerializer.Serialize(response, ApiJson.Options));
+                    return;
+                }
             }
         }
 
@@ -58,12 +67,22 @@ public sealed class XssSanitizationMiddleware(RequestDelegate next)
         _ => false,
     };
 
+    // NonBacktracking runs in linear time, so a crafted body cannot make these checks slow.
+    private const RegexOptions Options = RegexOptions.IgnoreCase | RegexOptions.NonBacktracking;
+    private static readonly TimeSpan MatchTimeout = TimeSpan.FromMilliseconds(100);
+
+    private static readonly Regex[] Patterns =
+    [
+        new(@"<script\b.*?</script>", Options | RegexOptions.Singleline, MatchTimeout),
+        // Only inside a tag: plain text such as "Online = yes" is not an event handler.
+        new(@"<[^>]*\bon\w+\s*=", Options, MatchTimeout),
+        new(@"javascript:", Options, MatchTimeout),
+    ];
+
     private static bool IsMaliciousString(string input)
     {
         if (string.IsNullOrEmpty(input)) return false;
 
-        return Regex.IsMatch(input, @"<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>", RegexOptions.IgnoreCase, TimeSpan.FromMilliseconds(100))
-            || Regex.IsMatch(input, @"on\w+\s*=\s*[""']?[^""'>\s]*[""']?", RegexOptions.IgnoreCase, TimeSpan.FromMilliseconds(100))
-            || Regex.IsMatch(input, @"javascript:", RegexOptions.IgnoreCase, TimeSpan.FromMilliseconds(100));
+        return Patterns.Any(p => p.IsMatch(input));
     }
 }
