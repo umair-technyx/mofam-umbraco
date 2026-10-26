@@ -31,6 +31,7 @@ public static class SearchConstants
     [
         CmsConstants.ContentTypes.Service,
         CmsConstants.ContentTypes.Resource,
+        CmsConstants.ContentTypes.MediaItem,
     ];
 
     // Allowed page size for a search. A value outside this range is moved into it.
@@ -50,6 +51,14 @@ public static class SearchConstants
             [CmsConstants.ContentTypes.Service] =
             [
                 new FilterSource(CmsConstants.Fields.Categories, CmsConstants.ContentTypes.ServiceCategory),
+            ],
+            [CmsConstants.ContentTypes.Resource] =
+            [
+                new FilterSource(CmsConstants.Fields.Categories,CmsConstants.ContentTypes.ResourceCategory),
+            ],
+            [CmsConstants.ContentTypes.MediaItem] =
+            [
+                new FilterSource(CmsConstants.Fields.Categories, CmsConstants.ContentTypes.MediaCategory),
             ],
         };
 

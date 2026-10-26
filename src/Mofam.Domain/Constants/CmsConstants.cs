@@ -23,6 +23,9 @@ public static class CmsConstants
         public const string Hubs = "hubs";
         public const string ServiceCategory = "serviceCategory";
         public const string ServiceCategories = "serviceCategories";
+        public const string ResourceCategory = "resourceCategory";
+        public const string MediaItem = "mediaItem";
+        public const string MediaCategory = "mediaCategory";
         public const string Categories = "categories";
         public const string ContactUsFormSettings = "contactUsFormSettings";
         public const string ContactEmailTemplate = "contactEmailTemplate";
