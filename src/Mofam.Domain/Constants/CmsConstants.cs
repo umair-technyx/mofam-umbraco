@@ -16,22 +16,20 @@ public static class CmsConstants
     {
         public const string Page = "page";
         public const string Service = "service";
-        public const string Services = "services";
+        public const string News = "news";
         public const string Resource = "resource";
-        public const string Resources = "resources";
-        public const string Hub = "hub";
-        public const string Hubs = "hubs";
+        public const string Story = "story";
+        public const string Leader = "leader";
+        public const string Media = "media";
         public const string ServiceCategory = "serviceCategory";
-        public const string ServiceCategories = "serviceCategories";
-        public const string ResourceCategory = "resourceCategory";
-        public const string MediaItem = "mediaItem";
         public const string MediaCategory = "mediaCategory";
-        public const string Categories = "categories";
+        public const string ResourceCategory = "resourceCategory";
+        public const string NewsCategory = "newsCategory";
         public const string ContactUsFormSettings = "contactUsFormSettings";
         public const string ContactEmailTemplate = "contactEmailTemplate";
 
         // Content types with their own detail page (reached by slug). Any other type picked inside a page is shown in full.
-        public static readonly string[] PageTypes = [Page, Service, ServiceCategory, Hub];
+        public static readonly string[] PageTypes = [Page, Service, ServiceCategory];
     }
 
     public static class Cultures
