@@ -66,6 +66,7 @@ public static class SearchConstants
             [CmsConstants.ContentTypes.News] =
             [
                 new FilterSource(CmsConstants.Fields.Categories, CmsConstants.ContentTypes.NewsCategory),
+                new FilterSource(CmsConstants.Fields.Year, CmsConstants.ContentTypes.NewsYearCategory),
             ],
         };
 

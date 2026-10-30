@@ -25,6 +25,7 @@ public static class CmsConstants
         public const string MediaCategory = "mediaCategory";
         public const string ResourceCategory = "resourceCategory";
         public const string NewsCategory = "newsCategory";
+        public const string NewsYearCategory = "newsYearCategory";
         public const string ContactUsFormSettings = "contactUsFormSettings";
         public const string ContactEmailTemplate = "contactEmailTemplate";
 
@@ -46,6 +47,7 @@ public static class CmsConstants
         public const string Slug = "slug";
         public const string Title = "title";
         public const string Categories = "categories";
+        public const string Year = "year";
         public const string DetailPageComponents = "detailPageComponents";
         public const string EmailSubject = "emailSubject";
         public const string AdminEmailHtml = "adminEmailHtml";
