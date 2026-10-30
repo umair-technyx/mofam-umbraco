@@ -35,29 +35,23 @@ public sealed class StartupService(
     {
         using var tracer = new FunctionTracer(loginfile: true);
 
-        try
+        var site = siteRootResolver.GetRoot(CmsConstants.RootAlias.Site);
+        if (site is null)
         {
-            var site = siteRootResolver.GetRoot(CmsConstants.RootAlias.Site);
-            if (site is null)
-            {
-                logger.Warning("Startup requested but no '{RootAlias}' root was found", CmsConstants.RootAlias.Site);
-                return null;
-            }
+            logger.Warning("Startup requested but no '{RootAlias}' root was found", CmsConstants.RootAlias.Site);
+            return null;
+        }
 
-            return new Startup
-            {
-                Culture = culture,
-                Header = BuildHeader(site, culture),
-                Footer = BuildFooter(site, culture),
-                Dictionary = await GetDictionaryAsync(culture),
-                ContentTypes = CmsConstants.ContentTypes.PageTypes,
-            };
-        }
-        catch (Exception ex)
+        // A failure is not caught here: GlobalExceptionMiddleware logs it once, with the request path.
+        return new Startup
         {
-            logger.Error(ex, "GetStartupAsync failed. Culture={Culture}", culture);
-            throw;
-        }
+            Culture = culture,
+            Header = BuildHeader(site, culture),
+            Footer = BuildFooter(site, culture),
+            Scripts = BuildScripts(site, culture),
+            Dictionary = await GetDictionaryAsync(culture),
+            ContentTypes = CmsConstants.ContentTypes.PageTypes,
+        };
     }
 
     #endregion
@@ -66,25 +60,38 @@ public sealed class StartupService(
 
     private HeaderDto BuildHeader(IPublishedContent site, string? culture) => new()
     {
+        TopBarLabel = valueMapper.Text(site, CmsConstants.SiteFields.TopBarLabel, culture),
+        LearnMoreCta = valueMapper.Links(site, CmsConstants.SiteFields.LearnMoreCta, culture).FirstOrDefault(),
+        Navigation = Navigation(site, CmsConstants.SiteFields.Header, culture),
         PrimaryLogo = valueMapper.Media(site, CmsConstants.SiteFields.HeaderPrimaryLogo, culture),
         SecondaryLogo = valueMapper.Media(site, CmsConstants.SiteFields.HeaderSecondaryLogo, culture),
         LogoAltText = valueMapper.Text(site, CmsConstants.SiteFields.HeaderLogoAltText, culture),
-        TopBarLabel = valueMapper.Text(site, CmsConstants.SiteFields.TopBarLabel, culture),
-        SearchBarLabel = valueMapper.Text(site, CmsConstants.SiteFields.SearchBarLabel, culture),
-        LearnMoreCta = valueMapper.Links(site, CmsConstants.SiteFields.LearnMoreCta, culture).FirstOrDefault(),
-        AccessibilityScript = valueMapper.Text(site, CmsConstants.SiteFields.AccessibilityScript, culture),
-        Navigation = Navigation(site, CmsConstants.SiteFields.Header, culture),
+        EmailLabel = valueMapper.Text(site, CmsConstants.SiteFields.HeaderEmailLabel, culture),
+        EmailInputText = valueMapper.Text(site, CmsConstants.SiteFields.HeaderEmailInputText, culture),
+        PhoneLabel = valueMapper.Text(site, CmsConstants.SiteFields.HeaderPhoneLabel, culture),
+        PhoneInputText = valueMapper.Text(site, CmsConstants.SiteFields.HeaderPhoneInputText, culture),
+        SocialIconsLabel = valueMapper.Text(site, CmsConstants.SiteFields.HeaderSocialIconsLabel, culture),
+        SocialIcons = valueMapper.BlockListItems(site, CmsConstants.SiteFields.HeaderSocialIcons, culture),
+
     };
 
     private FooterDto BuildFooter(IPublishedContent site, string? culture) => new()
     {
+        Navigation = Navigation(site, CmsConstants.SiteFields.Footer, culture),
         PrimaryLogo = valueMapper.Media(site, CmsConstants.SiteFields.FooterPrimaryLogo, culture),
         SecondaryLogo = valueMapper.Media(site, CmsConstants.SiteFields.FooterSecondaryLogo, culture),
         LogoAltText = valueMapper.Text(site, CmsConstants.SiteFields.FooterLogoAltText, culture),
-        Navigation = Navigation(site, CmsConstants.SiteFields.Footer, culture),
-        SocialLinks = valueMapper.Links(site, CmsConstants.SiteFields.SocialLinks, culture),
-        FollowUsLabel = valueMapper.Text(site, CmsConstants.SiteFields.FollowUsLabel, culture),
         BottomText = ApplyLastUpdated(valueMapper.Text(site, CmsConstants.SiteFields.BottomText, culture), culture),
+        FollowUsLabel = valueMapper.Text(site, CmsConstants.SiteFields.FollowUsLabel, culture),
+        SocialLinks = valueMapper.Links(site, CmsConstants.SiteFields.SocialLinks, culture),
+    };
+
+    #endregion
+
+    #region Scripts
+    private ScriptsDto BuildScripts(IPublishedContent site, string? culture) => new()
+    {
+        AccessibilityScript = valueMapper.Text(site, CmsConstants.SiteFields.AccessibilityScript, culture),
     };
 
     #endregion

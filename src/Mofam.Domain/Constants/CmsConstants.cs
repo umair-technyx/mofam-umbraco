@@ -26,6 +26,7 @@ public static class CmsConstants
         public const string ResourceCategory = "resourceCategory";
         public const string NewsCategory = "newsCategory";
         public const string NewsYearCategory = "newsYearCategory";
+        public const string MediaYearCategory = "mediaYearCategory";
         public const string ContactUsFormSettings = "contactUsFormSettings";
         public const string ContactEmailTemplate = "contactEmailTemplate";
 
@@ -103,13 +104,18 @@ public static class CmsConstants
     {
         // Header Content tab
         public const string Header = "header";
+        public const string TopBarLabel = "topBarLabel";
+        public const string LearnMoreCta = "learnMoreCta";
         public const string HeaderPrimaryLogo = "headerPrimaryLogo";
         public const string HeaderSecondaryLogo = "headerSecondaryLogo";
         public const string HeaderLogoAltText = "headerLogoAltText";
-        public const string TopBarLabel = "topBarLabel";
-        public const string SearchBarLabel = "searchBarLabel";
-        public const string LearnMoreCta = "learnMoreCta";
-        public const string AccessibilityScript = "accessbilitiyScript"; 
+        public const string HeaderEmailLabel = "headerEmailLabel";
+        public const string HeaderEmailInputText = "headerEmailInputText";
+        public const string HeaderPhoneLabel = "headerPhoneLabel";
+        public const string HeaderPhoneInputText = "headerPhoneInputText";
+        public const string HeaderSocialIconsLabel = "headerSocialIconsLabel";
+        public const string HeaderSocialIcons = "headerSocialIcons";
+    
 
         // Footer Content tab
         public const string Footer = "footer";
@@ -120,6 +126,10 @@ public static class CmsConstants
         public const string FollowUsLabel = "followUsLabel";
         public const string BottomText = "bottomText";
         public const string LastUpdatedToken = "{lastUpdated}";
+
+
+        // Scripts Content tab
+        public const string AccessibilityScript = "accessibilityScript";
     }
 
     public static class Http
