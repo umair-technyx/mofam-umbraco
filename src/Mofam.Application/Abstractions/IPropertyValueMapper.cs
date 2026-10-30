@@ -24,12 +24,9 @@ public interface IPropertyValueMapper
     #region Typed values
 
     string? Text(IPublishedElement element, string alias, string? culture);
-
     MediaDto? Media(IPublishedElement element, string alias, string? culture);
-
     IReadOnlyList<LinkDto> Links(IPublishedElement element, string alias, string? culture);
-
-    // Value of a color picker as a CSS color, for example "#FEEAC2". Null if no color is picked.
+    IReadOnlyList<IReadOnlyDictionary<string, object?>> BlockListItems(IPublishedElement element, string alias, string? culture);
     string? Color(IPublishedElement element, string alias, string? culture);
 
     #endregion

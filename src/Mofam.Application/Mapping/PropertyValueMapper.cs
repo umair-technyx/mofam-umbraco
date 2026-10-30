@@ -2,6 +2,7 @@ using Mofam.Application.Abstractions;
 using Mofam.Application.Helpers;
 using Mofam.Domain.Models.Dtos;
 using Umbraco.Cms.Core.Models;
+using Umbraco.Cms.Core.Models.Blocks;
 using Umbraco.Cms.Core.Models.PublishedContent;
 using Umbraco.Cms.Core.PropertyEditors.ValueConverters;
 using Umbraco.Cms.Core.Strings;
@@ -67,7 +68,6 @@ public sealed class PropertyValueMapper(IMediaUrlBuilder mediaUrlBuilder) : IPro
         }
     }
 
-   
     private static string? ToCssColor(string? color)
     {
         if (string.IsNullOrWhiteSpace(color)) return null;
@@ -108,6 +108,19 @@ public sealed class PropertyValueMapper(IMediaUrlBuilder mediaUrlBuilder) : IPro
             Link one => LinkMapper.Map(one) is { } dto ? [dto] : [],
             _ => [],
         };
+
+    public IReadOnlyList<IReadOnlyDictionary<string, object?>> BlockListItems(IPublishedElement element, string alias, string? culture) =>
+        Raw(element, alias, culture) is BlockListModel blocks
+            ? blocks
+                .Select(block => (IReadOnlyDictionary<string, object?>)block.Content.Properties.ToDictionary(
+                    property => property.Alias,
+                    property =>
+                    {
+                        var value = property.GetValue(culture) ?? property.GetValue(null);
+                        return TryMapLeaf(value, culture, out var mapped) ? mapped : value?.ToString();
+                    }))
+                .ToList()
+            : [];
 
     public string? Color(IPublishedElement element, string alias, string? culture) =>
         Raw(element, alias, culture) switch
