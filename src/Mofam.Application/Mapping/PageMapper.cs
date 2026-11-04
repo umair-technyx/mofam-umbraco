@@ -95,7 +95,7 @@ public sealed class PageMapper(
             .Where(c => string.Equals(c.Alias, CmsConstants.Fields.MediaSection, StringComparison.OrdinalIgnoreCase))
             .Select(c => c.Properties as IDictionary<string, object?>)
             .Sum(p => p is not null
-                      && p.TryGetValue(CmsConstants.Fields.Media, out var media)
+                      && p.TryGetValue(CmsConstants.Fields.MediaItems, out var media)
                       && media is System.Collections.IEnumerable items and not string
                 ? items.Cast<object?>().Count()
                 : 0);
