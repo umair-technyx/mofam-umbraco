@@ -83,7 +83,7 @@ public sealed class StartupService(
         LogoAltText = valueMapper.Text(site, CmsConstants.SiteFields.FooterLogoAltText, culture),
         BottomText = ApplyLastUpdated(valueMapper.Text(site, CmsConstants.SiteFields.BottomText, culture), culture),
         FollowUsLabel = valueMapper.Text(site, CmsConstants.SiteFields.FollowUsLabel, culture),
-        SocialLinks = valueMapper.Links(site, CmsConstants.SiteFields.SocialLinks, culture),
+        SocialLinks = valueMapper.BlockListItems(site, CmsConstants.SiteFields.SocialLinks, culture),
     };
 
     #endregion

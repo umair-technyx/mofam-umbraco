@@ -48,7 +48,7 @@ public sealed record FooterDto
     public MediaDto? SecondaryLogo { get; init; }
     public string? LogoAltText { get; init; }
     public IReadOnlyList<NavigationItemDto> Navigation { get; init; } = [];
-    public IReadOnlyList<LinkDto> SocialLinks { get; init; } = [];
+    public IReadOnlyList<IReadOnlyDictionary<string, object?>> SocialLinks { get; init; } = [];
     public string? FollowUsLabel { get; init; }
     public string? BottomText { get; init; }
 }
