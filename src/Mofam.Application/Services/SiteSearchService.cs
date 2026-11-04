@@ -130,6 +130,16 @@ public sealed class SiteSearchService(
                                     term.MultipleCharacterWildcard());
         }
 
+        if (!string.IsNullOrWhiteSpace(request.Year))
+        {
+            var year = request.Year.Trim();
+            // Only a plain four-digit year; anything else matches nothing rather than everything.
+            if (year.Length != 4 || !year.All(char.IsAsciiDigit)) return null;
+
+            op = op.And().GroupedOr(CommonHelper.ExpandForCulture([SearchConstants.PublishedDateField], request.Culture),
+                                    year.MultipleCharacterWildcard());
+        }
+
         if (request.Filters is { Count: > 0 })
         {
             foreach (var (field, values) in request.Filters)
