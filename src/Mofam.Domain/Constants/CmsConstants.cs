@@ -50,7 +50,7 @@ public static class CmsConstants
         public const string Categories = "categories";
         public const string Year = "year";
         public const string MediaSection = "mediaSection";
-        public const string Media = "media";
+        public const string MediaItems = "mediaItems";
         public const string MediaCount = "mediaCount";
         public const string DetailPageComponents = "detailPageComponents";
         public const string EmailSubject = "emailSubject";
