@@ -109,18 +109,27 @@ public sealed class PropertyValueMapper(IMediaUrlBuilder mediaUrlBuilder) : IPro
             _ => [],
         };
 
-    public IReadOnlyList<IReadOnlyDictionary<string, object?>> BlockListItems(IPublishedElement element, string alias, string? culture) =>
-        Raw(element, alias, culture) is BlockListModel blocks
-            ? blocks
-                .Select(block => (IReadOnlyDictionary<string, object?>)block.Content.Properties.ToDictionary(
-                    property => property.Alias,
-                    property =>
-                    {
-                        var value = property.GetValue(culture) ?? property.GetValue(null);
-                        return TryMapLeaf(value, culture, out var mapped) ? mapped : value?.ToString();
-                    }))
-                .ToList()
-            : [];
+    public IReadOnlyList<IReadOnlyDictionary<string, object?>> BlockListItems(IPublishedElement element, string alias, string? culture)
+    {
+        IEnumerable<IPublishedElement> items = Raw(element, alias, culture) switch
+        {
+            BlockListModel blocks => blocks.Select(block => block.Content),
+            IPublishedContent picked => [picked],
+            IEnumerable<IPublishedContent> pickedItems => pickedItems,
+            _ => [],
+        };
+
+        return items.Select(item => ItemProperties(item, culture)).ToList();
+    }
+
+    private IReadOnlyDictionary<string, object?> ItemProperties(IPublishedElement item, string? culture) =>
+        item.Properties.ToDictionary(
+            property => property.Alias,
+            property =>
+            {
+                var value = property.GetValue(culture) ?? property.GetValue(null);
+                return TryMapLeaf(value, culture, out var mapped) ? mapped : value?.ToString();
+            });
 
     public string? Color(IPublishedElement element, string alias, string? culture) =>
         Raw(element, alias, culture) switch

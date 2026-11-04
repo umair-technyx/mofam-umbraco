@@ -25,6 +25,9 @@ public static class SearchConstants
     // (title_en) and others without, so the query adds both forms at query time.
     public static readonly string[] SearchableFields = ["title", "description"];
 
+    // Date field the dedicated `year` parameter is matched against (prefix match on the indexed date).
+    public const string PublishedDateField = "publishedDate";
+
     // Content types that callers can search. Anything not listed cannot be reached
     // through the API, so adding a type here is a deliberate choice.
     public static readonly string[] AllowedContentTypes =

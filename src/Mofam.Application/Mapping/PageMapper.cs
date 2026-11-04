@@ -61,6 +61,14 @@ public sealed class PageMapper(
         PageDto ResolveForComponentMapper(IPublishedContent picked, ISet<Guid> branchAncestors) =>
             ResolvePage(picked, culture, branchAncestors);
 
+        var properties = MapProperties(content, culture, ResolveForComponentMapper, ancestors);
+        var components = isDetail ? MapComponents(content, culture, ResolveForComponentMapper, ancestors) : [];
+
+        if (isDetail && string.Equals(content.ContentType.Alias, CmsConstants.ContentTypes.Media, StringComparison.OrdinalIgnoreCase))
+        {
+            properties[CmsConstants.Fields.MediaCount] = CountMedia(components);
+        }
+
         return new PageDto
         {
             Id = content.Key.ToString(),
@@ -72,11 +80,25 @@ public sealed class PageMapper(
                     ?? cultureInfo?.Name
                     ?? content.Name
                     ?? string.Empty,
-            Properties = MapProperties(content, culture, ResolveForComponentMapper, ancestors),
-            Components = isDetail ? MapComponents(content, culture, ResolveForComponentMapper, ancestors) : [],
+            Properties = properties,
+            Components = components,
             Seo = isDetail ? seoMapper.Map(content, culture) : null,
         };
     }
+
+    /// <summary>
+    /// The media banner shows "10 images", so the number of items in the media section is given at
+    /// the top of the response and the client does not have to count the array.
+    /// </summary>
+    private static int CountMedia(IReadOnlyList<ComponentDto> components) =>
+        components
+            .Where(c => string.Equals(c.Alias, CmsConstants.Fields.MediaSection, StringComparison.OrdinalIgnoreCase))
+            .Select(c => c.Properties as IDictionary<string, object?>)
+            .Sum(p => p is not null
+                      && p.TryGetValue(CmsConstants.Fields.MediaItems, out var media)
+                      && media is System.Collections.IEnumerable items and not string
+                ? items.Cast<object?>().Count()
+                : 0);
 
     /// <summary>
     /// The callback handed to <see cref="IComponentMapper"/> for every content-picker
