@@ -23,9 +23,6 @@ public sealed record SearchRequest
     /// </summary>
     public Dictionary<string, string[]>? Filters { get; init; }
 
-    /// <summary>Four-digit year (e.g. <c>2026</c>). Strictly ANDed with the rest and matched only against publishedDate.</summary>
-    public string? Year { get; init; }
-
     public int PageNumber { get; init; } = 1;
 
     public int PageSize { get; init; } = 10;
