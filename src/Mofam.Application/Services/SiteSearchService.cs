@@ -130,22 +130,23 @@ public sealed class SiteSearchService(
                                     term.MultipleCharacterWildcard());
         }
 
-        if (!string.IsNullOrWhiteSpace(request.Year))
-        {
-            var year = request.Year.Trim();
-            // Only a plain four-digit year; anything else matches nothing rather than everything.
-            if (year.Length != 4 || !year.All(char.IsAsciiDigit)) return null;
-
-            op = op.And().GroupedOr(CommonHelper.ExpandForCulture([SearchConstants.PublishedDateField], request.Culture),
-                                    year.MultipleCharacterWildcard());
-        }
-
         if (request.Filters is { Count: > 0 })
         {
             foreach (var (field, values) in request.Filters)
             {
                 var clean = values?.Where(v => !string.IsNullOrWhiteSpace(v)).ToArray() ?? [];
                 if (string.IsNullOrWhiteSpace(field) || clean.Length == 0) continue;
+
+                // The year option is a key like the others, but it is matched against the year of publishedDate.
+                if (field.Equals(CmsConstants.Fields.Year, StringComparison.OrdinalIgnoreCase))
+                {
+                    var years = YearsOf(clean, request.Culture);
+                    if (years.Length == 0) return null;
+
+                    op = op.And().GroupedOr(CommonHelper.ExpandForCulture([SearchConstants.PublishedDateField], request.Culture),
+                                            [.. years.Select(y => y.MultipleCharacterWildcard())]);
+                    continue;
+                }
 
                 var guids = FilterValues(clean);
                 if (guids.Length == 0) return null;
@@ -173,6 +174,21 @@ public sealed class SiteSearchService(
             .Distinct()];
     }
 
+
+    /// <summary>
+    /// Year options are keys of year category nodes, whose title is the year ("2026"). Keys that are not a
+    /// year category, or whose title is not a four-digit year, are dropped so they cannot match everything.
+    /// </summary>
+    private string[] YearsOf(string[] keys, string? culture)
+    {
+        return [.. keys
+            .Select(k => Guid.TryParse(k?.Trim(), out var guid) ? contentQuery.Content(guid) : null)
+            .Where(n => n is not null && SearchConstants.YearContentTypes.Contains(n.ContentType.Alias, StringComparer.OrdinalIgnoreCase))
+            .Select(n => n!.GetProperty(CmsConstants.Fields.Title) is { } title ? (title.GetValue(culture) ?? title.GetValue(null))?.ToString()?.Trim() : null)
+            .Where(y => y is { Length: 4 } && y.All(char.IsAsciiDigit))
+            .Select(y => y!)
+            .Distinct()];
+    }
 
     /// <summary>
     /// Resolves the indexed hit back to published content and maps it in listing mode —

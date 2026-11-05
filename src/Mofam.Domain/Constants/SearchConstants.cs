@@ -40,6 +40,14 @@ public static class SearchConstants
         CmsConstants.ContentTypes.Leader
     ];
 
+    // Content types whose nodes are the options of the "year" filter. The node title is the year ("2026").
+    // A year key that points to any other type is ignored, so add the year type of a new listing here.
+    public static readonly string[] YearContentTypes =
+    [
+        CmsConstants.ContentTypes.NewsYearCategory,
+        CmsConstants.ContentTypes.MediaYearCategory,
+    ];
+
     // Allowed page size for a search. A value outside this range is moved into it.
     public const int MinPageSize = 1;
     public const int MaxPageSize = 50;
