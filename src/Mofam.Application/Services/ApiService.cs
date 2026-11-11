@@ -9,6 +9,7 @@ using Mofam.Domain.Models.Dtos;
 using Mofam.Domain.Options;
 using Serilog;
 using Umbraco.Cms.Core;
+using Umbraco.Cms.Core.Models.PublishedContent;
 using Umbraco.Cms.Core.Strings;
 using Umbraco.Cms.Infrastructure.Examine;
 using Umbraco.Extensions;
@@ -78,24 +79,39 @@ public sealed class ApiService(
 
             if (matches.Count == 0) return null;
 
+            IPublishedContent? matchedContent = null;
+            var exactMatchesCount = 0;
+
+            foreach (var match in matches)
+            {
+                if (!int.TryParse(match.Id, out var nodeId)) continue;
+
+                var candidate = contentQuery.Content(nodeId);
+
+                // The index can be a little behind the published cache (for example, a page was just
+                // unpublished), so check the node is still published.
+                if (candidate is null || !candidate.IsPublished(culture)) continue;
+
+                var candidateSlug = GetContentSlug(candidate, culture);
+                if (string.Equals(candidateSlug, wanted, StringComparison.OrdinalIgnoreCase))
+                {
+                    exactMatchesCount++;
+                    matchedContent ??= candidate;
+                }
+            }
+
+            if (matchedContent is null) return null;
+
             // Umbraco does not check that a custom slug field is unique, so two nodes can share a slug.
-            if (matches.Count > 1)
+            if (exactMatchesCount > 1)
             {
                 logger.Warning(
                     "Duplicate slug '{Slug}' on {Count} '{ContentType}' nodes for culture {Culture} — serving the first",
-                    wanted, matches.Count, pageContentTypeAlias, culture);
+                    wanted, exactMatchesCount, pageContentTypeAlias, culture);
             }
 
-            if (!int.TryParse(matches[0].Id, out var nodeId)) return null;
-
-            var content = contentQuery.Content(nodeId);
-
-            // The index can be a little behind the published cache (for example, a page was just
-            // unpublished), so check the node is still published.
-            if (content is null || !content.IsPublished(culture)) return null;
-
             // Detail mode: everything, including detailPageComponents and SEO.
-            return pageMapper.Map(content, culture, PageMapMode.Detail);
+            return pageMapper.Map(matchedContent, culture, PageMapMode.Detail);
         }
         catch (Exception ex)
         {
@@ -105,6 +121,23 @@ public sealed class ApiService(
                 pageContentTypeAlias, slug, culture);
             throw;
         }
+    }
+
+    private string? GetContentSlug(IPublishedContent content, string? culture)
+    {
+        var rawSlug = (content.GetProperty(CmsConstants.Fields.Slug)?.GetValue(culture)
+                       ?? content.GetProperty(CmsConstants.Fields.Slug)?.GetValue(null))?.ToString();
+
+        var normalized = CommonHelper.NormaliseSlug(rawSlug, shortStringHelper);
+        if (!string.IsNullOrEmpty(normalized)) return normalized;
+
+        if (culture is not null && content.Cultures.TryGetValue(culture, out var cultureInfo))
+        {
+            return CommonHelper.NormaliseSlug(cultureInfo.UrlSegment, shortStringHelper);
+        }
+
+        var fallbackSegment = content.Cultures.Values.FirstOrDefault()?.UrlSegment;
+        return CommonHelper.NormaliseSlug(fallbackSegment, shortStringHelper);
     }
 
     #endregion
