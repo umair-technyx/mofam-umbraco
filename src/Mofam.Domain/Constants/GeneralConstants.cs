@@ -8,6 +8,14 @@ public static class GeneralConstants
 
     #endregion
 
+    #region Page lookup
+
+    // A page that is not found is remembered for a short time only when its slug is not longer than this,
+    // so a very long made-up slug cannot fill the memory. Real slugs are much shorter.
+    public const int MaxRememberedSlugLength = 100;
+
+    #endregion
+
     #region Email and phone patterns
 
     // One plain email address (name@domain.tld): no display text, no comments, no second address and no line breaks.

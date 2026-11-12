@@ -27,6 +27,7 @@ public sealed class ApiService(
     ILogger logger) : IApiService
 {
     private const string CacheKeyPrefix = "mofam:page:";
+    private const string MissKeyPrefix = "mofam:page-miss:";
 
     #region Get page
 
@@ -34,13 +35,30 @@ public sealed class ApiService(
     {
         // Lower case, so "Page" and "page" (or "EN" and "en") share one cache entry.
         var cacheKey = $"{CacheKeyPrefix}{contentTypeAlias.ToLowerInvariant()}:{culture?.ToLowerInvariant()}:{CommonHelper.NormaliseSlug(slug, shortStringHelper)}";
+        var missKey = $"{MissKeyPrefix}{cacheKey}";
+
+        // A page that was not found a moment ago is not searched for again.
+        if (cachePolicy.TryGet<object>(missKey, out _)) return null;
 
         // The page cache is linked to a shared token, so a publish in the CMS clears all pages at once.
-        return cachePolicy.GetOrCreate(
+        // The token is read before the build, so a publish during the build is not missed.
+        var token = pageCacheToken.Token;
+
+        var page = cachePolicy.GetOrCreate(
             cacheKey,
             cacheOptions.Value.Page,
             () => BuildPage(contentTypeAlias, slug, culture),
-            pageCacheToken.Token);
+            token);
+
+        // Only short slugs are remembered, so a very long made-up slug cannot fill the memory. A publish
+        // clears the entry through the token. If the page is asked for before the index has caught up with the
+        // publish, it stays not found until the remembered time has passed.
+        if (page is null && slug.Length <= GeneralConstants.MaxRememberedSlugLength)
+        {
+            cachePolicy.Set<object>(missKey, true, cacheOptions.Value.PageNotFound, token);
+        }
+
+        return page;
     }
 
     #endregion
