@@ -14,6 +14,17 @@ public interface ICachePolicy
 
     #endregion
 
+    #region Remembered misses
+
+    // Reads an entry without creating it. False when caching is off or the entry is not there.
+    bool TryGet<T>(string key, out T? value);
+
+    // Stores an entry for the given time. Does nothing when caching is off or the time is not above zero.
+    // If expireWith is given, the entry also expires as soon as that token is cancelled.
+    void Set<T>(string key, T value, TimeSpan duration, CancellationToken expireWith = default);
+
+    #endregion
+
     #region Remove
 
     // Removes one entry. Used when a cached key is no longer valid.

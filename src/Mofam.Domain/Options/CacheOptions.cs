@@ -23,6 +23,13 @@ public sealed class CacheOptions
     /// <summary>Page responses. The heaviest payload and the most visible if stale.</summary>
     public int PageSeconds { get; set; } = 60;
 
+    /// <summary>
+    /// How long a page that was not found is remembered, so a repeated wrong slug does not search the index each time.
+    /// It is cleared when content is published. A page asked for in the short moment between the publish and the
+    /// index update can still show as not found until this time has passed. 0 turns it off.
+    /// </summary>
+    public int PageNotFoundSeconds { get; set; } = 15;
+
     /// <summary>Startup payload — header, footer and dictionary.</summary>
     public int StartupSeconds { get; set; } = 300;
 
@@ -32,6 +39,7 @@ public sealed class CacheOptions
     public TimeSpan SiteRoot => TimeSpan.FromSeconds(SiteRootSeconds);
     public TimeSpan Filters => TimeSpan.FromSeconds(FilterSeconds);
     public TimeSpan Page => TimeSpan.FromSeconds(PageSeconds);
+    public TimeSpan PageNotFound => TimeSpan.FromSeconds(PageNotFoundSeconds);
     public TimeSpan Startup => TimeSpan.FromSeconds(StartupSeconds);
     public TimeSpan ContactConfig => TimeSpan.FromSeconds(ContactConfigSeconds);
 }

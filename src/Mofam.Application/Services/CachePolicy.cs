@@ -46,6 +46,26 @@ public sealed class CachePolicy(IMemoryCache cache, IOptions<CacheOptions> optio
         return value;
     }
 
+    public bool TryGet<T>(string key, out T? value)
+    {
+        value = default;
+        return options.Value.Enabled && cache.TryGetValue(key, out value);
+    }
+
+    public void Set<T>(string key, T value, TimeSpan duration, CancellationToken expireWith = default)
+    {
+        if (!ShouldCache(duration)) return;
+
+        var entryOptions = new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = duration };
+
+        if (expireWith.CanBeCanceled)
+        {
+            entryOptions.AddExpirationToken(new CancellationChangeToken(expireWith));
+        }
+
+        cache.Set(key, value, entryOptions);
+    }
+
     public void Remove(string key) => cache.Remove(key);
 
     private bool ShouldCache(TimeSpan duration) => options.Value.Enabled && duration > TimeSpan.Zero;
