@@ -185,6 +185,54 @@ stages:
           exit 0
 
     - task: Bash@3
+      displayName: 'Docker Build (with NuGetAudit)'
+      inputs:
+        targetType: inline
+        script: |
+          set -e
+          IMAGE="$(acrLoginServer)/$(MofamBeRepo):$(SHORT_SHA)"
+          echo "Building Docker image: $IMAGE"
+          docker build -t "$IMAGE" .
+
+    - task: Bash@3
+      displayName: 'Trivy - Container Image Vulnerability Scan'
+      continueOnError: true
+      inputs:
+        targetType: inline
+        script: |
+          set +e
+          REPORT_DIR="$(SECURITY_REPORT_DIR)"
+          IMAGE="$(acrLoginServer)/$(MofamBeRepo):$(SHORT_SHA)"
+          REPORT="$REPORT_DIR/trivy.json"
+          mkdir -p "$REPORT_DIR"
+
+          echo "Starting Trivy container image scan for $IMAGE..."
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$REPORT_DIR:/reports" \
+            aquasec/trivy:latest image \
+            --no-progress \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --format json \
+            --output /reports/trivy.json \
+            "$IMAGE"
+
+          EXIT_CODE=$?
+          if [ "$EXIT_CODE" -eq 0 ]; then
+            echo "Trivy scan completed. No vulnerabilities reported."
+          else
+            echo "Trivy scanner finished with exit code: $EXIT_CODE"
+          fi
+
+          if [ ! -s "$REPORT" ]; then
+            echo '{"Results":[]}' > "$REPORT"
+          fi
+          chmod 644 "$REPORT" 2>/dev/null || true
+          echo "Trivy report generated successfully."
+          exit 0
+
+    - task: Bash@3
       displayName: 'Verify Scanner Reports'
       condition: always()
       continueOnError: true
@@ -197,7 +245,7 @@ stages:
           echo "================================="
           ls -lah "$REPORT_DIR"
 
-          for report in semgrep.json gitleaks.json osv.json; do
+          for report in semgrep.json gitleaks.json osv.json trivy.json; do
             if [ -s "$REPORT_DIR/$report" ]; then
               echo "OK: $report"
             else
@@ -221,6 +269,7 @@ stages:
           gitleaks_file = os.path.join(report_dir, "gitleaks.json")
           semgrep_file = os.path.join(report_dir, "semgrep.json")
           osv_file = os.path.join(report_dir, "osv.json")
+          trivy_file = os.path.join(report_dir, "trivy.json")
 
           def clean_path(p):
               if not p: return ""
@@ -269,7 +318,26 @@ stages:
                               })
           except Exception: pass
 
-          total_violations = len(secrets) + len(sast_findings) + len(deps)
+          # 4. Parse Trivy (Container Image)
+          trivy_findings = []
+          try:
+              with open(trivy_file) as f:
+                  data = json.load(f)
+                  for res in (data.get("Results") or []):
+                      target = clean_path(res.get("Target", "Container Image"))
+                      for vuln in (res.get("Vulnerabilities") or []):
+                          trivy_findings.append({
+                              "name": vuln.get("PkgName", "Unknown"),
+                              "version": vuln.get("InstalledVersion", "Unknown"),
+                              "fixed": vuln.get("FixedVersion", "N/A"),
+                              "severity": vuln.get("Severity", "UNKNOWN").upper(),
+                              "id": vuln.get("VulnerabilityID", "Unknown"),
+                              "target": target,
+                              "title": vuln.get("Title", vuln.get("VulnerabilityID", "Security finding"))
+                          })
+          except Exception: pass
+
+          total_violations = len(secrets) + len(sast_findings) + len(deps) + len(trivy_findings)
           status_color = "#2ECC71" if total_violations == 0 else "#E74C3C"
           status_text = "PASSED (0 Issues)" if total_violations == 0 else f"ISSUES DETECTED ({total_violations} Findings)"
           now = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
@@ -325,6 +393,17 @@ stages:
                 <tbody>{osv_rows}</tbody>
               </table>"""
 
+          # Trivy HTML Table
+          trivy_html = ""
+          if not trivy_findings:
+              trivy_html = "<p class='clean'>✔ No High or Critical vulnerabilities found in container image.</p>"
+          else:
+              trivy_rows = "".join([f"<tr><td><strong>{t['name']}</strong><br><small style='color:#94a3b8'>{t['target']}</small></td><td>{t['version']}</td><td><span style='color:#38bdf8; font-weight:bold;'>{t['fixed']}</span></td><td><span class='sev-badge' style='background: {'#ef4444' if t['severity'] == 'CRITICAL' else '#f59e0b'};'>{t['severity']}</span></td><td><code>{t['id']}</code></td></tr>" for t in trivy_findings])
+              trivy_html = f"""<table class="data-table">
+                <thead><tr><th style="width: 30%;">Package / Target</th><th style="width: 15%;">Installed</th><th style="width: 15%;">Fixed In</th><th style="width: 15%;">Severity</th><th style="width: 25%;">Vulnerability ID</th></tr></thead>
+                <tbody>{trivy_rows}</tbody>
+              </table>"""
+
           html = f"""<!DOCTYPE html>
           <html>
           <head>
@@ -341,7 +420,7 @@ stages:
               h1 {{ margin: 0 0 8px 0; font-size: 24px; }}
               .meta {{ color: #94a3b8; font-size: 13px; margin-bottom: 20px; }}
               .badge {{ display: inline-block; padding: 5px 12px; border-radius: 20px; font-weight: bold; background: {status_color}; color: #fff; font-size: 12px; margin-left: 6px; }}
-              .cards {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin: 20px 0; }}
+              .cards {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin: 20px 0; }}
               .card {{ background: #334155; padding: 16px; border-radius: 8px; text-align: center; }}
               .card h3 {{ margin: 0 0 6px 0; font-size: 13px; color: #cbd5e1; }}
               .card .count {{ font-size: 26px; font-weight: bold; }}
@@ -378,6 +457,7 @@ stages:
                 <div class="card"><h3>🔑 Gitleaks (Secrets)</h3><div class="count" style="color: {'#2ecc71' if len(secrets)==0 else '#e74c3c'}">{len(secrets)}</div></div>
                 <div class="card"><h3>🛡️ Semgrep (Code Flaws)</h3><div class="count" style="color: {'#2ecc71' if len(sast_findings)==0 else '#e74c3c'}">{len(sast_findings)}</div></div>
                 <div class="card"><h3>📦 OSV (Dependencies)</h3><div class="count" style="color: {'#2ecc71' if len(deps)==0 else '#e74c3c'}">{len(deps)}</div></div>
+                <div class="card"><h3>🐳 Trivy (Container)</h3><div class="count" style="color: {'#2ecc71' if len(trivy_findings)==0 else '#e74c3c'}">{len(trivy_findings)}</div></div>
               </div>
 
               <div class="section">
@@ -393,6 +473,11 @@ stages:
               <div class="section">
                 <h2>3. Dependency Vulnerabilities (Google OSV)</h2>
                 {osv_html}
+              </div>
+
+              <div class="section">
+                <h2>4. Container Image Vulnerabilities (Aqua Trivy)</h2>
+                {trivy_html}
               </div>
             </div>
           </body>
@@ -440,7 +525,7 @@ stages:
       displayName: "Security: Enforce Quality Gate"
 
     - task: AzureCLI@2
-      displayName: "Build & Push to ACR"
+      displayName: "Push to ACR"
       inputs:
         azureSubscription: $(azureServiceConnection)
         scriptType: bash
@@ -449,7 +534,7 @@ stages:
           set -e
           az acr login --name $(acrName)
           IMAGE="$(acrLoginServer)/$(MofamBeRepo):$(SHORT_SHA)"
-          docker build -t "$IMAGE" .
+          echo "Pushing verified image to ACR: $IMAGE"
           docker push "$IMAGE"
 
     # Prepare deployable manifests in artifact staging

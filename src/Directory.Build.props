@@ -1,0 +1,19 @@
+<Project>
+  <PropertyGroup>
+    <!-- Enable NuGet vulnerability auditing -->
+    <NuGetAudit>true</NuGetAudit>
+
+    <!-- Audit both direct and transitive package dependencies -->
+    <NuGetAuditMode>all</NuGetAuditMode>
+
+    <!-- Advisory severity threshold to report: low, moderate, high, or critical -->
+    <NuGetAuditLevel>moderate</NuGetAuditLevel>
+
+    <!-- Warn if target framework is end-of-life -->
+    <CheckEolTargetFramework>true</CheckEolTargetFramework>
+
+    <!-- Optional: Treat High (NU1903) and Critical (NU1904) vulnerability warnings as build errors -->
+    <!-- <WarningsAsErrors>$(WarningsAsErrors);NU1903;NU1904</WarningsAsErrors> -->
+  </PropertyGroup>
+</Project>
+
