@@ -61,3 +61,7 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+
+# Local security-gate reports and local settings with real secrets
+.work/
+**/appsettings.Development.json

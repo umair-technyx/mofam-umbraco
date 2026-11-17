@@ -30,3 +30,7 @@
 **/values.dev.yaml
 LICENSE
 README.md
+
+# Local reports and settings with real secrets must not go into the image
+**/.work
+**/appsettings.Development.json
