@@ -132,8 +132,10 @@ public sealed class EntraIdBackOfficeComposer : IComposer
                         {
                             var reference = context.HttpContext.TraceIdentifier;
 
+                            // Information, not Warning: anyone can call the callback with a broken request (Warning goes to Sentry).
+                            // A missing setting and a user with no role are written as Error and Warning where they happen.
                             context.HttpContext.RequestServices.GetRequiredService<ILogger<EntraIdBackOfficeComposer>>()
-                                .LogWarning(context.Failure, "Microsoft (Entra) login failed: {Reason}. Reference {Reference}.",
+                                .LogInformation(context.Failure, "Microsoft (Entra) login failed: {Reason}. Reference {Reference}.",
                                     SafeLogText(context.Failure?.Message), reference);
 
                             var reason = context.Failure is EntraNoRoleException

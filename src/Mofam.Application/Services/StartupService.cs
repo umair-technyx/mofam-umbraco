@@ -22,6 +22,7 @@ public sealed class StartupService(
     IPublishedContentQuery contentQuery,
     IDictionaryItemService dictionaryItemService,
     ICachePolicy cachePolicy,
+    PageCacheToken pageCacheToken,
     IOptions<CacheOptions> cacheOptions,
     ILogger logger) : IStartupService
 {
@@ -29,7 +30,8 @@ public sealed class StartupService(
 
     #region Startup
 
-    public Task<Startup?> GetStartupAsync(string? culture) => cachePolicy.GetOrCreateAsync($"{CacheKeyPrefix}{culture}", cacheOptions.Value.Startup, () => BuildStartupAsync(culture));
+    // Linked to the publish token, so a publish, a dictionary change or a media change clears it at once.
+    public Task<Startup?> GetStartupAsync(string? culture) => cachePolicy.GetOrCreateAsync($"{CacheKeyPrefix}{culture}", cacheOptions.Value.Startup, () => BuildStartupAsync(culture), pageCacheToken.Token);
 
     private async Task<Startup?> BuildStartupAsync(string? culture)
     {

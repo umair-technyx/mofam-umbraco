@@ -138,5 +138,8 @@ public static class CmsConstants
     public static class Http
     {
         public const string ApiKeyHeader = "X-Api-Key";
+
+        // The visitor's address, sent by the front end server. It is trusted only on a request that also has the correct API key.
+        public const string ClientIpHeader = "X-Client-IP";
     }
 }

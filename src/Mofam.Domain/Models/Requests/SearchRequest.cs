@@ -1,4 +1,6 @@
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
+using Mofam.Domain.Constants;
 
 namespace Mofam.Domain.Models.Requests;
 
@@ -6,6 +8,7 @@ namespace Mofam.Domain.Models.Requests;
 public sealed record SearchRequest
 {
     /// <summary>Free-text term. When empty the query returns everything matching the filters.</summary>
+    [StringLength(SearchConstants.MaxQueryLength, ErrorMessage = GeneralConstants.FieldTooLongMessage)]
     public string? Query { get; init; }
 
     /// <summary>

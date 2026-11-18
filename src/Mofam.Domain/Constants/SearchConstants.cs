@@ -52,6 +52,9 @@ public static class SearchConstants
     public const int MinPageSize = 1;
     public const int MaxPageSize = 50;
 
+    // Longest search text allowed. A longer one is refused with 400; a very long text made one search take seconds.
+    public const int MaxQueryLength = 150;
+
     #endregion
 
     #region Filters

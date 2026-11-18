@@ -14,6 +14,7 @@ using Mofam.CMS.Pages;
 using Mofam.CMS.Security;
 using Mofam.Infrastructure.HealthChecks;
 using Mofam.Infrastructure.Middleware;
+using Mofam.Infrastructure.RateLimiting;
 using Mofam.Infrastructure.Services;
 
 const string CorsPolicyName = "ConfiguredOrigins";
@@ -58,10 +59,10 @@ rateLimitSection.Bind(rateLimitOptions);
 
 if (rateLimitOptions.PermitLimit <= 0 || rateLimitOptions.WindowSeconds <= 0
     || rateLimitOptions.SignInPermitLimit <= 0 || rateLimitOptions.SignInWindowSeconds <= 0
-    || rateLimitOptions.FormPermitLimit <= 0 || rateLimitOptions.FormWindowSeconds <= 0)
+    || rateLimitOptions.FormPermitLimit <= 0 || rateLimitOptions.FormWindowSeconds <= 0 || rateLimitOptions.FormTotalPermitLimit <= 0)
 {
     throw new InvalidOperationException(
-        $"Invalid '{RateLimitOptions.SectionName}' configuration — PermitLimit, WindowSeconds, SignInPermitLimit, SignInWindowSeconds, FormPermitLimit and FormWindowSeconds must be greater than 0.");
+        $"Invalid '{RateLimitOptions.SectionName}' configuration — PermitLimit, WindowSeconds, SignInPermitLimit, SignInWindowSeconds, FormPermitLimit, FormWindowSeconds and FormTotalPermitLimit must be greater than 0.");
 }
 
 var entraSettings = builder.Configuration.GetSection(EntraBackOfficeOptions.SectionName).Get<EntraBackOfficeOptions>() ?? new EntraBackOfficeOptions();
@@ -71,48 +72,7 @@ builder.Services.AddRateLimiter(rateLimiterOptions =>
 {
     rateLimiterOptions.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
-    rateLimiterOptions.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(http =>
-    {
-        var clientIp = http.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-
-        if (http.Request.Path.StartsWithSegments("/api/web/form", StringComparison.OrdinalIgnoreCase))
-        {
-            var formName = http.Request.Path.Value!.TrimEnd('/').Split('/').Last().ToLowerInvariant();
-            if (!GeneralConstants.FormNames.Contains(formName)) formName = "other";
-
-            return RateLimitPartition.GetFixedWindowLimiter(
-                $"form:{formName}:{clientIp}",
-                _ => new FixedWindowRateLimiterOptions
-                {
-                    PermitLimit = rateLimitOptions.FormPermitLimit,
-                    Window = TimeSpan.FromSeconds(rateLimitOptions.FormWindowSeconds),
-                    QueueLimit = 0,
-                });
-        }
-
-        if (rateLimitOptions.Enabled && http.Request.Path.StartsWithSegments("/api/web", StringComparison.OrdinalIgnoreCase))
-        {
-            return RateLimitPartition.GetFixedWindowLimiter(
-                $"api:{clientIp}",
-                _ => new FixedWindowRateLimiterOptions
-                {
-                    PermitLimit = rateLimitOptions.PermitLimit,
-                    Window = TimeSpan.FromSeconds(rateLimitOptions.WindowSeconds),
-                    QueueLimit = 0,
-                });
-        }
-
-        return signInPaths.Any(signInPath => http.Request.Path.Equals(signInPath, StringComparison.OrdinalIgnoreCase))
-            ? RateLimitPartition.GetFixedWindowLimiter(
-                $"signin:{clientIp}",
-                _ => new FixedWindowRateLimiterOptions
-                {
-                    PermitLimit = rateLimitOptions.SignInPermitLimit,
-                    Window = TimeSpan.FromSeconds(rateLimitOptions.SignInWindowSeconds),
-                    QueueLimit = 0,
-                })
-            : RateLimitPartition.GetNoLimiter("other");
-    });
+    rateLimiterOptions.GlobalLimiter = RateLimitPolicy.Create(rateLimitOptions, signInPaths);
 
     rateLimiterOptions.OnRejected = async (context, cancellationToken) =>
     {
@@ -124,7 +84,7 @@ builder.Services.AddRateLimiter(rateLimiterOptions =>
         }
 
         // Written to the log (Information, not Warning: an attack would send one Sentry event for each rejected request).
-        LoggingService.AppLogger.Information("Rate limit exceeded. Path={Path}, RemoteIp={RemoteIp}", context.HttpContext.Request.Path, context.HttpContext.Connection.RemoteIpAddress);
+        LoggingService.AppLogger.Information("Rate limit exceeded. Path={Path}, Client={Client}", context.HttpContext.Request.Path, ClientAddress.Resolve(context.HttpContext).Key);
 
         var response = ApiResponse<object>.TooManyRequests("Rate limit exceeded. Please try again later.") with { TraceId = context.HttpContext.TraceIdentifier };
         await context.HttpContext.Response.WriteAsync(JsonSerializer.Serialize(response, ApiJson.Options), cancellationToken);
@@ -220,6 +180,8 @@ app.UseRateLimiter();
 
 app.UseWhen(ctx => ctx.Request.Path.StartsWithSegments("/api"), branch =>
 {
+    // First, so a caller without the key is refused before the body is read or validated.
+    branch.UseMiddleware<ApiKeyMiddleware>();
     branch.UseMiddleware<NotFoundNormalizationMiddleware>();
     branch.UseMiddleware<ApiValidationMiddleware>();
     branch.UseMiddleware<XssSanitizationMiddleware>();

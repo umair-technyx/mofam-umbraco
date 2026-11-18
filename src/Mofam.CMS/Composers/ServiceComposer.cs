@@ -6,7 +6,6 @@ using Mofam.Application.Mapping;
 using Mofam.Application.Services;
 using Mofam.Domain.Options;
 using Mofam.Infrastructure.Abstractions;
-using Mofam.Infrastructure.Filters;
 using Mofam.Infrastructure.Services;
 using Mofam.Application.IServices;
 using Mofam.Application.Notifications;
@@ -33,7 +32,6 @@ public sealed class ServiceComposer : IComposer
         // Required: SearchController takes ISiteSearchService in its constructor, so it must be registered.
         builder.Services.AddScoped<ISiteSearchService, SiteSearchService>();
         builder.Services.AddScoped<IFilterService, FilterService>();
-        builder.Services.AddScoped<ApiKeyAuthFilter>();
         builder.Services.AddScoped<IDatabaseConnectivityService, DatabaseConnectivityService>();
 
         // Normalises the slug and blocks duplicates before content is saved.
@@ -41,6 +39,8 @@ public sealed class ServiceComposer : IComposer
 
         // Clears the startup and filter caches when content changes, so the CMS changes show at once.
         builder.AddNotificationHandler<ContentCacheRefresherNotification, ContentCacheNotificationHandler>();
+        builder.AddNotificationHandler<DictionaryCacheRefresherNotification, ContentCacheNotificationHandler>();
+        builder.AddNotificationHandler<MediaCacheRefresherNotification, ContentCacheNotificationHandler>();
 
         builder.Services.Configure<SecurityOptions>(builder.Config.GetSection(SecurityOptions.SectionName));
         builder.Services.Configure<CacheOptions>(builder.Config.GetSection(CacheOptions.SectionName));

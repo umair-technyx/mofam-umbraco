@@ -1,27 +1,21 @@
-using Microsoft.Extensions.Caching.Memory;
 using Mofam.Application.Services;
-using Mofam.Domain.Constants;
 using Umbraco.Cms.Core.Events;
 using Umbraco.Cms.Core.Notifications;
 
 namespace Mofam.Application.Notifications;
-public sealed class ContentCacheNotificationHandler(IMemoryCache cache, PageCacheToken pageCacheToken): INotificationHandler<ContentCacheRefresherNotification>
+
+// Clears the API cache when content, a dictionary item (a translation) or a media item changes in the CMS.
+// Pages, startup and filters are all linked to the publish token, so one reset clears them together.
+public sealed class ContentCacheNotificationHandler(PageCacheToken pageCacheToken) :
+    INotificationHandler<ContentCacheRefresherNotification>,
+    INotificationHandler<DictionaryCacheRefresherNotification>,
+    INotificationHandler<MediaCacheRefresherNotification>
 {
-    public void Handle(ContentCacheRefresherNotification notification)
-    {
-        // Pages: one reset clears every cached page, whatever its slug.
-        pageCacheToken.Reset();
+    public void Handle(ContentCacheRefresherNotification notification) => pageCacheToken.Reset();
 
-        foreach (var culture in CmsConstants.Cultures.All)
-        {
-            // Startup
-            cache.Remove($"{StartupService.CacheKeyPrefix}{culture}");
+    // Labels and texts in the startup response come from the dictionary.
+    public void Handle(DictionaryCacheRefresherNotification notification) => pageCacheToken.Reset();
 
-            // Filters (the key uses the content type in lower case, see FilterService)
-            foreach (var contentType in SearchConstants.FilterDefinitions.Keys)
-            {
-                cache.Remove($"{FilterService.CacheKeyPrefix}{contentType.ToLowerInvariant()}:{culture}");
-            }
-        }
-    }
+    // A replaced logo or image changes the startup response and the pages that show it.
+    public void Handle(MediaCacheRefresherNotification notification) => pageCacheToken.Reset();
 }

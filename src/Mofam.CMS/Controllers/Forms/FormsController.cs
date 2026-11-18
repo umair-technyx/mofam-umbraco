@@ -10,7 +10,6 @@ namespace Mofam.CMS.Controllers.Forms;
 
 [ApiController]
 [Route("api/web/form")]
-[ServiceFilter(typeof(ApiKeyAuthFilter))]
 [ApiResponseValidationFilter]
 public sealed class FormsController(IContactService contactService) : ControllerBase
 {
