@@ -20,6 +20,9 @@ const string CorsPolicyName = "ConfiguredOrigins";
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
+// The "Server: Kestrel" header only tells an attacker what runs here.
+builder.WebHost.ConfigureKestrel(kestrel => kestrel.AddServerHeader = false);
+
 if (!builder.Environment.IsDevelopment())
 {
     var keyVaultSection = builder.Configuration.GetSection("KeyVault");
@@ -196,9 +199,18 @@ await app.BootUmbracoAsync();
 
 app.UseForwardedHeaders();
 
+// Before everything else, so every response (errors and refusals too) gets the browser security headers.
+app.UseMiddleware<SecurityHeadersMiddleware>();
+
 app.UseResponseCompression();
 
 app.UseMiddleware<GlobalExceptionMiddleware>();
+
+// Browsers remember to use HTTPS only. Not in Development, where the site runs on plain http.
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHsts();
+}
 
 app.UseHttpsRedirection();
 
@@ -245,8 +257,7 @@ app.UseUmbraco()
         u.UseWebsiteEndpoints();
         u.EndpointRouteBuilder.MapControllers();
         u.EndpointRouteBuilder.MapHealthChecks("/health");
-        u.EndpointRouteBuilder.MapGet("/", (Umbraco.Cms.Core.Configuration.IUmbracoVersion umbracoVersion) =>
-            Results.Content(StatusPage.Html(umbracoVersion.SemanticVersion.ToString().Split('+')[0]), "text/html"));
+        u.EndpointRouteBuilder.MapGet("/", () => Results.Content(StatusPage.Html(), "text/html"));
 
     });
 

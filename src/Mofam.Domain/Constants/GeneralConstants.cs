@@ -16,6 +16,23 @@ public static class GeneralConstants
 
     #endregion
 
+    #region Security headers
+
+    // Sent with every response by SecurityHeadersMiddleware. The public site sets its own headers in the front end.
+    public const string ReferrerPolicy = "strict-origin-when-cross-origin";
+    public const string PermissionsPolicy = "camera=(), microphone=(), geolocation=(), payment=(), usb=()";
+
+    // The API and the small status page: nothing may load and nothing may frame them. Inline styles are for the status page.
+    public const string DefaultCsp = "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
+
+    // The backoffice needs inline scripts and styles, so it only limits who may frame it.
+    public const string BackOfficeCsp = "frame-ancestors 'self'";
+
+    // An SVG media file opened directly cannot run scripts. Only SVGs get it: the sandbox stops Chrome from showing PDFs.
+    public const string MediaCsp = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
+
+    #endregion
+
     #region Email and phone patterns
 
     // One plain email address (name@domain.tld): no display text, no comments, no second address and no line breaks.
