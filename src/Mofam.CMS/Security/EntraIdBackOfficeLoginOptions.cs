@@ -38,6 +38,18 @@ public sealed class EntraIdBackOfficeLoginOptions(
             // First login: runs before the new user is saved.
             OnAutoLinking = (user, info) =>
             {
+                // Umbraco also links a Microsoft login to an existing user that has the same email, without checking that
+                // Microsoft verified the email. So only a new user is linked here; an existing user must be deleted first
+                // (it is created again, and linked, at the next Microsoft login).
+                if (user.HasIdentity)
+                {
+                    logger.LogWarning(
+                        "Microsoft (Entra) login refused: an Umbraco user with the same email already exists (user id {UserId}, oid {Oid}). Delete that user if it is the same person.",
+                        user.Id, info.Principal.FindFirst("oid")?.Value);
+
+                    throw new InvalidOperationException("An Umbraco user with this email already exists and is not linked to this Microsoft account.");
+                }
+
                 var aliases = ResolveGroups(info, settings);
 
                 // Throwing here stops Umbraco from creating a user with no group.

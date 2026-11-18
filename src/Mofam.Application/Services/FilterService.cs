@@ -17,6 +17,7 @@ public sealed class FilterService(
     IPublishedContentQuery contentQuery,
     IPropertyValueMapper valueMapper,
     ICachePolicy cachePolicy,
+    PageCacheToken pageCacheToken,
     IOptions<CacheOptions> cacheOptions,
     ILogger logger) : IFilterService
 {
@@ -32,7 +33,8 @@ public sealed class FilterService(
 
         if (!SearchConstants.FilterDefinitions.TryGetValue(contentType, out var sources) || sources.Length == 0)
         {
-            logger.Warning("No filters defined for content type {ContentType}", contentType);
+            // Information, not Warning: the content type comes from the request, so anyone can trigger this (Warning goes to Sentry).
+            logger.Information("No filters defined for content type {ContentType}", contentType);
             return null;
         }
 
@@ -41,6 +43,7 @@ public sealed class FilterService(
 
         try
         {
+            // Linked to the publish token, so a new or changed category shows at once after publish.
             return cachePolicy.GetOrCreate(cacheKey, cacheOptions.Value.Filters, () =>
             {
                 // Scan the content tree once for all option types, not once per filter group.
@@ -60,7 +63,7 @@ public sealed class FilterService(
                     ContentType = contentType,
                     Filters = filters,
                 };
-            });
+            }, pageCacheToken.Token);
         }
         catch (Exception ex)
         {

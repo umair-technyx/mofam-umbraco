@@ -10,7 +10,6 @@ namespace Mofam.CMS.Controllers.Web;
 
 [ApiController]
 [Route("api/web")]
-[ServiceFilter(typeof(ApiKeyAuthFilter))]
 [ApiResponseValidationFilter]
 public sealed class SearchController(ISiteSearchService searchService) : ControllerBase
 {

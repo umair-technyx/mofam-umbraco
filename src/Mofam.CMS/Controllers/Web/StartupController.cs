@@ -3,13 +3,11 @@ using Mofam.Application.IServices;
 using Mofam.Domain.Constants;
 using Mofam.Domain.Models.Common;
 using Mofam.Domain.Models.Dtos;
-using Mofam.Infrastructure.Filters;
 
 namespace Mofam.CMS.Controllers.Web;
 
 [ApiController]
 [Route("api/web")]
-[ServiceFilter(typeof(ApiKeyAuthFilter))]
 public sealed class StartupController(IStartupService startupService) : ControllerBase
 {
     [HttpGet("{culture}/startup")]

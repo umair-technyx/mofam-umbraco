@@ -33,7 +33,7 @@ public sealed class CachePolicy(IMemoryCache cache, IOptions<CacheOptions> optio
         return value;
     }
 
-    public async Task<T?> GetOrCreateAsync<T>(string key, TimeSpan duration, Func<Task<T?>> factory)
+    public async Task<T?> GetOrCreateAsync<T>(string key, TimeSpan duration, Func<Task<T?>> factory, CancellationToken expireWith = default)
     {
         if (!ShouldCache(duration)) return await factory();
 
@@ -41,7 +41,7 @@ public sealed class CachePolicy(IMemoryCache cache, IOptions<CacheOptions> optio
 
         var value = await factory();
 
-        if (value is not null) cache.Set(key, value, duration);
+        if (value is not null) Set(key, value, duration, expireWith);
 
         return value;
     }

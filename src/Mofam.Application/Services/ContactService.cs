@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.RegularExpressions;
 using Mofam.Application.Abstractions;
 using Mofam.Application.IServices;
 using Mofam.Application.Helpers;
@@ -11,7 +12,7 @@ using static Mofam.Domain.Constants.GeneralConstants;
 
 namespace Mofam.Application.Services;
 
-public sealed class ContactService(
+public sealed partial class ContactService(
     IContactEmailConfigMapper configMapper,
     EmailHelper emailHelper,
     IRecaptchaService recaptchaService,
@@ -105,13 +106,19 @@ public sealed class ContactService(
 
         var subject = config.AdminSubject ?? string.Empty;
 
-        var body = config.AdminBody
-            .Replace("{{Subject}}", WebUtility.HtmlEncode(data.Subject ?? string.Empty))
-            .Replace("{{FirstName}}", WebUtility.HtmlEncode(data.FirstName ?? string.Empty))
-            .Replace("{{LastName}}", WebUtility.HtmlEncode(data.LastName ?? string.Empty))
-            .Replace("{{Email}}", WebUtility.HtmlEncode(data.Email ?? string.Empty))
-            .Replace("{{ContactNumber}}", WebUtility.HtmlEncode(data.ContactNumber ?? string.Empty))
-            .Replace("{{Message}}", WebUtility.HtmlEncode(data.Message ?? string.Empty).Replace("\n", "<br>"));
+        var values = new Dictionary<string, string>
+        {
+            ["Subject"] = WebUtility.HtmlEncode(data.Subject ?? string.Empty),
+            ["FirstName"] = WebUtility.HtmlEncode(data.FirstName ?? string.Empty),
+            ["LastName"] = WebUtility.HtmlEncode(data.LastName ?? string.Empty),
+            ["Email"] = WebUtility.HtmlEncode(data.Email ?? string.Empty),
+            ["ContactNumber"] = WebUtility.HtmlEncode(data.ContactNumber ?? string.Empty),
+            ["Message"] = WebUtility.HtmlEncode(data.Message ?? string.Empty).Replace("\n", "<br>"),
+        };
+
+        // All placeholders are filled in one pass over the template. The visitor's text is not scanned again, so a
+        // "{{Message}}" typed in the subject stays plain text and cannot copy the message many times into the email.
+        var body = PlaceholderRegex().Replace(config.AdminBody, match => values[match.Groups[1].Value]);
 
         #endregion
 
@@ -127,6 +134,9 @@ public sealed class ContactService(
     private static HttpStatusException Unavailable() => new(HttpStatusCode.ServiceUnavailable, GeneralConstants.ServiceUnavailableMessage);
 
     private static HttpStatusException Failed() => new(HttpStatusCode.InternalServerError, GeneralConstants.UnexpectedErrorMessage);
+
+    [GeneratedRegex(@"\{\{(Subject|FirstName|LastName|Email|ContactNumber|Message)\}\}", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex PlaceholderRegex();
 
     #endregion
 }

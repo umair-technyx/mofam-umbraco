@@ -10,7 +10,7 @@ public interface ICachePolicy
     // Pass the token before running the factory, so a reset during the build is not missed.
     T? GetOrCreate<T>(string key, TimeSpan duration, Func<T?> factory, CancellationToken expireWith = default);
 
-    Task<T?> GetOrCreateAsync<T>(string key, TimeSpan duration, Func<Task<T?>> factory);
+    Task<T?> GetOrCreateAsync<T>(string key, TimeSpan duration, Func<Task<T?>> factory, CancellationToken expireWith = default);
 
     #endregion
 

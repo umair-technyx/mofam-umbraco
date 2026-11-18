@@ -19,4 +19,7 @@ public sealed class RateLimitOptions
     // The forms (/api/web/form/...): each form has its own counter, and each client address may submit it this many times in this many seconds.
     public int FormPermitLimit { get; set; } = 5;
     public int FormWindowSeconds { get; set; } = 600;
+
+    // The forms: all visitors together may submit each form only this many times in its window, so a bot with many addresses cannot flood it.
+    public int FormTotalPermitLimit { get; set; } = 100;
 }

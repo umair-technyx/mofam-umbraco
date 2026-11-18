@@ -29,11 +29,10 @@ public sealed class GlobalExceptionMiddleware(RequestDelegate next, Serilog.ILog
             // The client gets only a generic message and the trace id. The real error is written to the log.
             logger.Error(ex, "Unhandled exception. TraceId {TraceId}, path {Path}", context.TraceIdentifier, context.Request.Path);
 
+            // A client mistake is answered with HttpStatusException above. Anything that reaches here is a fault in
+            // the server, so it is a 500, even an ArgumentException or KeyNotFoundException thrown by a bug.
             var (statusCode, message) = ex switch
             {
-                UnauthorizedAccessException => (HttpStatusCode.Unauthorized, "Unauthorized."),
-                ArgumentException => (HttpStatusCode.BadRequest, "Invalid request."),
-                KeyNotFoundException => (HttpStatusCode.NotFound, "Resource not found."),
                 BadHttpRequestException bad => ((HttpStatusCode)bad.StatusCode, bad.StatusCode == StatusCodes.Status413PayloadTooLarge ? "Request body too large." : "Bad request."),
                 _ => (HttpStatusCode.InternalServerError, "An unexpected error occurred."),
             };
