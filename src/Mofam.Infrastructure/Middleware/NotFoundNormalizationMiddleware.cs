@@ -25,7 +25,10 @@ public sealed class NotFoundNormalizationMiddleware(RequestDelegate next)
             throw;
         }
 
-        if (context.Response.StatusCode == StatusCodes.Status404NotFound && buffer.Length == 0)
+        // An empty 404, or a 404 that is not JSON (Umbraco's own HTML "Page Not Found" page, which also shows
+        // that the site runs on Umbraco), becomes the standard JSON answer. Our own JSON 404s are kept as they are.
+        var isJson = context.Response.ContentType?.Contains("json", StringComparison.OrdinalIgnoreCase) == true;
+        if (context.Response.StatusCode == StatusCodes.Status404NotFound && (buffer.Length == 0 || !isJson))
         {
             var response = new ApiResponse<object>
             {
