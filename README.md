@@ -1,99 +1,122 @@
-# Mofam — Umbraco Headless Boilerplate
+# Mofam — Umbraco Headless API
 
-A headless API boilerplate built on **Umbraco CMS 17.6.2**. Umbraco's backoffice is used purely as a content editor — no Razor views, no public content rendering. All content is served through secured, versioned REST endpoints.
+A headless API built on **Umbraco CMS 17.8.2** (LTS). The Umbraco backoffice is used only as a content editor: there are no Razor views and no public content rendering. A Next.js frontend reads all content through the REST endpoints below.
 
 ## Tech Stack
 
-- **.NET 10** / Umbraco CMS 17.6.2 (pinned exact version)
-- **Serilog** — structured logging (Console + File sinks; optional Sentry integration)
-- **Examine** — Umbraco's built-in search/indexing engine
-- SQL Server (or any Umbraco-supported provider) via `umbracoDbDSN`
+- **.NET 10** / **Umbraco CMS 17.8.2** (versions pinned centrally in `src/Directory.Packages.props`)
+- **Examine** — Umbraco's search index, used for page lookup and site search
+- **SQL Server / Azure SQL** via `ConnectionStrings:umbracoDbDSN`
+- **Azure Blob Storage** for media (`Umbraco.StorageProviders.AzureBlob`)
+- **Azure Key Vault** for configuration outside Development
+- **Microsoft Entra ID** single sign-on for the backoffice (App Roles → Umbraco user groups)
+- **Google reCAPTCHA Enterprise** on the contact form
+- **MailKit (SMTP)** or **SendGrid** for email
+- **Serilog** (console, file, Azure Blob) with optional **Sentry**
 
 ## Project Structure
 
 Clean-architecture style, split across four projects:
 
 ```
-Mofam.Domain          Options, constants, DTOs, and other framework-agnostic models
-Mofam.Infrastructure   Middleware, filters, health checks, and infra-facing services
-Mofam.Application      Business logic / application services
-Mofam.CMS              Umbraco host — Program.cs, controllers, composers, config
+Mofam.Domain           Options, constants, DTOs, requests, exceptions
+Mofam.Infrastructure   Middleware, rate limiting, API key check, health checks, logging
+Mofam.Application      Services, mappers, cache, notification handlers
+Mofam.CMS              Umbraco host — Program.cs, controllers, composers, Entra login, config
 ```
 
-Interfaces live in an `Abstractions/` folder alongside their layer (e.g. `Mofam.Application/Abstractions`, `Mofam.Infrastructure/Abstractions`) — this convention is used project-wide.
+Interfaces live in an `Abstractions/` (or `IServices/`) folder in their layer.
 
 ## Getting Started
 
-1. Clone the repo and open `Mofam.CMS.sln` (or the relevant `.sln`) in Visual Studio / Rider.
-2. Copy `appsettings.json` and fill in your own values (see **Configuration** below) — `appsettings.Development.json` is gitignored for local overrides.
+1. Clone the repo and open the solution in Visual Studio or Rider.
+2. Create `src/Mofam.CMS/appsettings.Development.json` (gitignored) with your local values; see **Configuration**.
 3. Point `ConnectionStrings:umbracoDbDSN` at your database.
-4. Run the `Mofam.CMS` project. On first run, Umbraco will bootstrap the database (unattended install is enabled).
-5. Visit `/` for a status page confirming the API is running and the Umbraco version in use.
-6. Visit `/umbraco` to access the backoffice and start creating content.
+4. Run `Mofam.CMS`. On first run Umbraco installs the database (unattended install is on).
+5. Visit `/` for the status page and `/umbraco` for the backoffice.
+
+In Development, Key Vault is not read; everything comes from the appsettings files. In every other environment the app loads Key Vault from `KeyVault:URL`.
 
 ## Configuration
 
-Key `appsettings.json` sections:
+Main `appsettings.json` sections (in Key Vault, use `--` between levels, e.g. `RateLimit--PermitLimit`; in environment variables use `__`):
 
 | Section | Purpose |
 |---|---|
-| `Security:ApiKey` | Shared API key required on all secured endpoints (`X-Api-Key` header) |
-| `RateLimit` | Fixed-window rate limiting (`PermitLimit`, `WindowSeconds`) |
-| `Cors:AllowedOrigins` | Allow-listed origins for browser requests (empty = deny all, fail-closed) |
-| `Sentry` | Optional error tracking — disabled by default; set `Enabled: true` + a real `Dsn` to turn on |
-| `Umbraco:CMS:Global:MainDomLock` | Set to `SqlMainDomLock` for multi-instance/load-balanced deployments |
-| `Umbraco:CMS:DeliveryApi:Enabled` | Kept `false` — Umbraco's built-in Delivery API is never exposed; only custom controllers below are public |
+| `Security:ApiKey` | Shared key required on every `/api` request (`X-Api-Key` header) |
+| `RateLimit` | Fixed-window limits: `PermitLimit`/`WindowSeconds` (API, per visitor), `SignInPermitLimit`/`SignInWindowSeconds`, `FormPermitLimit`/`FormWindowSeconds` (per visitor, per form), `FormTotalPermitLimit` (all visitors, per form) |
+| `Cache` | Cache on/off and durations for site root, pages, 404s, startup, filters and contact settings |
+| `Cors:AllowedOrigins` | Allowed browser origins (empty = none) |
+| `BackOfficeEntraId` | Entra ID login: tenant, client, secret, callback paths, `DenyLocalLogin`, `ExtraGroups` |
+| `GoogleReCaptcha` | reCAPTCHA Enterprise project, site key and credentials |
+| `EmailSettings` | Sender, SMTP or SendGrid |
+| `LogStorage` | Azure Blob containers for application and Umbraco logs |
+| `Sentry` | Optional error tracking (`Enabled` + `Dsn`) |
+| `KeyVault` | Key Vault URL, plus a service principal if no managed identity is used |
+| `AllowedHosts`, `Umbraco:CMS:WebRouting:UmbracoApplicationUrl` | The public host of this backend |
+| `Umbraco:CMS:Content:DisallowedUploadedFileExtensions` | File types that cannot be uploaded to Media (includes `html`, `xml`, `js`) |
 
 ## API Endpoints
 
-All endpoints (except `/health`) require an `X-Api-Key` header and are rate-limited.
+Every `/api` request needs the `X-Api-Key` header. The frontend server also sends `X-Client-IP` (the visitor's address, from Cloudflare's `CF-Connecting-IP`); it is trusted only together with a valid key.
 
 | Endpoint | Description |
 |---|---|
-| `GET /api/v1/web/pages/{culture}/{slug}` | Fetch a single web page by slug |
-| `GET /api/v1/app/pages/{culture}/{slug}` | Fetch a single app page by slug |
-| `GET /health` | Unauthenticated health check (DB connectivity + Umbraco runtime state) — for load balancers / uptime monitors |
-| `GET /` | Status page — confirms the API is running and shows the Umbraco version |
+| `GET /api/web/{culture}/startup` | Site settings: header, footer, navigation, labels |
+| `GET /api/web/{culture}/{contentType}/{slug}` | One page by content type and slug |
+| `GET /api/web/{culture}/filters?contentType=` | Filter groups for a listing |
+| `POST /api/web/search` | Search with paging and filters (query max 150 characters) |
+| `POST /api/web/form/{culture}/contact` | Contact form (reCAPTCHA + honeypot) |
+| `GET /health` | Health check for load balancers (no key) |
+| `GET /` | Status page (no Umbraco version shown) |
 
-Responses follow a consistent shape: `ApiResponse<T>` with `StatusCode`, `Success`, `Data`, `Message`, and `TraceId`.
+Responses use one shape: `ApiResponse<T>` with `StatusCode`, `Success`, `Message`, `Data`, `Errors` and `TraceId`.
 
-## Request Pipeline (Middleware)
+## Rate Limits
 
-Requests pass through this order (see `Program.cs`):
+- **API (`/api/web`)**: per visitor, `PermitLimit` per `WindowSeconds`. The frontend server's own calls (valid key, no `X-Client-IP`) are not limited.
+- **Forms (`/api/web/form/...`)**: each form has its own counters: `FormPermitLimit` per visitor and `FormTotalPermitLimit` for all visitors, per `FormWindowSeconds`. Only requests with a valid key count toward the total.
+- **Sign-in pages**: per visitor.
+- A refused request gets `429` with a `Retry-After` header. IPv6 visitors are counted per `/64` block.
 
-1. **Response compression** — Brotli + Gzip.
-2. **Global exception middleware** — catches any unhandled exception, maps it to a status code, and returns it as `ApiResponse<object>`. This is the *only* place unexpected errors are turned into HTTP responses — nothing upstream re-wraps or re-logs them.
-3. **404 normalization middleware** — buffers the response and rewrites empty 404 bodies into the standard `ApiResponse<object>` shape, so a raw/empty 404 never reaches the client.
-4. **Request validation middleware** — for `POST`/`PUT`/`PATCH`: enforces `Content-Type: application/json` and rejects malformed JSON before it reaches model binding.
-5. **XSS sanitization middleware** — scans `POST`/`PUT`/`PATCH` JSON bodies for `<script>` tags, inline event handlers, and `javascript:` URIs; rejects with 400 if found.
-6. **HTTPS redirection → CORS → rate limiting.**
-7. Umbraco's own middleware/endpoints (backoffice, website, health check, controllers, status page).
+## Caching
 
-## Routing
+Pages, startup and filters are cached in memory. A publish, a dictionary change or a media change in the CMS clears them at once.
 
-- Route parameters are automatically slugified to kebab-case (`RouteTokenTransformerConvention` + `SlugifyParameterTransformer`).
-- Controller routes are explicit (`api/v1/web/...`, `api/v1/app/...`) — there's no automatic `/api` prefix convention layered on top, to avoid double-prefixing.
+## Request Pipeline
+
+In order (see `Program.cs`):
+
+1. Forwarded headers
+2. Security headers (CSP, frame, cross-origin and referrer policies)
+3. Response compression (Brotli + Gzip)
+4. Global exception handler — a client mistake gets its status; anything else is a generic `500` with the `TraceId`
+5. HSTS (outside Development) and HTTPS redirection
+6. CORS
+7. Rate limiting
+8. For `/api` only: API key check → 404 normalization → request validation (JSON only, 1 MB body limit) → XSS check (not on forms)
+9. Umbraco (backoffice, controllers, health check, status page)
 
 ## Health Check
 
-`GET /health` runs a 3-layer check, cached for 10 seconds (`IMemoryCache`) so frequent monitoring hits don't hammer the DB on every call:
+`GET /health` checks that Umbraco is running and that the database answers `SELECT 1`. The result is cached for 10 seconds. It needs no key, so load balancers and uptime monitors can call it.
 
-1. Umbraco runtime state is `RuntimeLevel.Run` (fully booted).
-2. `IUmbracoDatabaseFactory` reports configured + connectable.
-3. A real `SELECT 1` round-trip against the database (not just a factory-level check).
+## Backoffice Login (Entra ID)
 
-It's intentionally the one unauthenticated, public endpoint — by design, for load balancers and uptime monitors.
+- Each Azure App Role value equals an Umbraco user group alias (`admin`, `editor`, `writer`, `translator`). Groups are synced on every login.
+- A user with no matching role cannot sign in.
+- A Microsoft login is never linked to an existing Umbraco user by email; delete the old local user first.
+- With `DenyLocalLogin` on, only Microsoft sign-in is allowed.
 
 ## Security Notes
 
-- API key comparison uses constant-time equality (`CryptographicOperations.FixedTimeEquals`) to avoid timing attacks; failed attempts are logged with path + remote IP.
-- CORS defaults to fail-closed — no origins are allowed until explicitly configured.
-- Request bodies are capped at 5 MB (Kestrel `MaxRequestBodySize`) — deliberately finite, not `long.MaxValue`.
-- Password policies are enforced for both backoffice users and members (`Umbraco:CMS:Security:UserPassword` / `MemberPassword`) — min length, digit/case/non-alphanumeric requirements, lockout after repeated failures.
-- `SanitizeTinyMce` is enabled — strips unsafe HTML/script from rich-text editor output.
+- The API key is compared in constant time.
+- Rejected keys and rate-limit refusals are logged at Information level, so an attacker cannot flood Sentry.
+- `SanitizeTinyMce` is on; HTML, XML and JS files cannot be uploaded to Media.
+- Keep secrets (API key, connection strings, client secret, Sentry DSN, HMAC key) out of git: use Key Vault.
 
 ## Deployment
 
-- For any multi-instance (load-balanced) deployment, set `MainDomLock` to `SqlMainDomLock` in config — otherwise multiple instances can each think they're the "main" instance.
-- Keep real secrets (API keys, connection strings, Sentry DSN) out of source control — use environment variables or a secrets manager in production.
-- Response compression is enabled for HTTPS by default — fine for a pure-JSON API; no extra MIME types needed since `application/json` is already covered.
+- The Docker image listens on port `8080`.
+- App Service / Kubernetes needs only `ASPNETCORE_ENVIRONMENT` and `KeyVault__URL` (plus a managed identity with *Key Vault Secrets User*, or a service principal); everything else comes from Key Vault.
+- For more than one instance, set `Umbraco:CMS:Global:MainDomLock` to `SqlMainDomLock`.

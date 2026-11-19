@@ -113,7 +113,7 @@ public sealed partial class ContactService(
             ["LastName"] = WebUtility.HtmlEncode(data.LastName ?? string.Empty),
             ["Email"] = WebUtility.HtmlEncode(data.Email ?? string.Empty),
             ["ContactNumber"] = WebUtility.HtmlEncode(data.ContactNumber ?? string.Empty),
-            ["Message"] = WebUtility.HtmlEncode(data.Message ?? string.Empty).Replace("\n", "<br>"),
+            ["Message"] = WebUtility.HtmlEncode(data.Message ?? string.Empty).Replace("\r\n", "<br>").Replace("\n", "<br>").Replace("\r", "<br>"),
         };
 
         // All placeholders are filled in one pass over the template. The visitor's text is not scanned again, so a

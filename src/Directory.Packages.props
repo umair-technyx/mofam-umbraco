@@ -5,10 +5,10 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- Umrbaco -->
-    <PackageVersion Include="Umbraco.Cms" Version="17.8.0" />
-    <PackageVersion Include="Umbraco.Cms.Core" Version="17.8.0" />
-    <PackageVersion Include="Umbraco.Cms.Infrastructure" Version="17.8.0" />
-    <PackageVersion Include="Umbraco.Cms.DevelopmentMode.Backoffice" Version="17.8.0" />
+    <PackageVersion Include="Umbraco.Cms" Version="17.8.2" />
+    <PackageVersion Include="Umbraco.Cms.Core" Version="17.8.2" />
+    <PackageVersion Include="Umbraco.Cms.Infrastructure" Version="17.8.2" />
+    <PackageVersion Include="Umbraco.Cms.DevelopmentMode.Backoffice" Version="17.8.2" />
     <PackageVersion Include="Microsoft.ICU.ICU4C.Runtime" Version="$(UmbracoAppLocalIcuVersion)" />
 
     <!-- Azure Key Vault -->
