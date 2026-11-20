@@ -10,6 +10,7 @@ using Mofam.Infrastructure.Services;
 using Mofam.Application.IServices;
 using Mofam.Application.Notifications;
 using Umbraco.Cms.Core.Notifications;
+using Mofam.Infrastructure.Routing;
 
 namespace Mofam.CMS.Composers;
 
@@ -33,6 +34,9 @@ public sealed class ServiceComposer : IComposer
         builder.Services.AddScoped<ISiteSearchService, SiteSearchService>();
         builder.Services.AddScoped<IFilterService, FilterService>();
         builder.Services.AddScoped<IDatabaseConnectivityService, DatabaseConnectivityService>();
+
+        // Builds the URL of every node from its slug and its place in the tree, so a link picked from the CMS has the front end shape.
+        builder.UrlProviders().Insert<SlugUrlProvider>();
 
         // Normalises the slug and blocks duplicates before content is saved.
         builder.AddNotificationHandler<ContentSavingNotification, SlugNotificationHandler>();

@@ -24,6 +24,7 @@ public sealed class StartupService(
     ICachePolicy cachePolicy,
     PageCacheToken pageCacheToken,
     IOptions<CacheOptions> cacheOptions,
+    IVariationContextAccessor variationContextAccessor,
     ILogger logger) : IStartupService
 {
     public const string CacheKeyPrefix = "mofam:startup:";
@@ -42,6 +43,13 @@ public sealed class StartupService(
         {
             logger.Warning("Startup requested but no '{RootAlias}' root was found", CmsConstants.RootAlias.Site);
             return null;
+        }
+
+        // Links picked from a content node get their URL in the current culture. Without this the Arabic header
+        // and footer links would be built in the default culture and come out with the /en prefix.
+        if (!string.IsNullOrWhiteSpace(culture))
+        {
+            variationContextAccessor.VariationContext = new VariationContext(culture);
         }
 
         // A failure is not caught here: GlobalExceptionMiddleware logs it once, with the request path.
