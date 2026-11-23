@@ -3,6 +3,7 @@ using Mofam.Application.Helpers;
 using Mofam.Domain.Constants;
 using Mofam.Domain.Models.Dtos;
 using Serilog;
+using Umbraco.Cms.Core;
 using Umbraco.Cms.Core.Models;
 using Umbraco.Cms.Core.Models.Blocks;
 using Umbraco.Cms.Core.Models.PublishedContent;
@@ -13,8 +14,10 @@ namespace Mofam.Application.Mapping;
 public sealed class ComponentMapper(
     IVariationContextAccessor variationContextAccessor,
     IPropertyValueMapper valueMapper,
+    IPublishedContentQuery contentQuery,
     ILogger logger) : IComponentMapper
 {
+
     public IReadOnlyList<ComponentDto> MapComponents(
         IPublishedProperty? componentsProperty,
         string? culture,
@@ -118,12 +121,22 @@ public sealed class ComponentMapper(
         ISet<Guid> ancestors)
     {
         var result = new Dictionary<string, object?>();
+
+        // Checked once per element, so every other element pays for one comparison only.
+        var isThumbnailCards = string.Equals(content.ContentType.Alias, CmsConstants.ThumbnailCards.SectionAlias, StringComparison.OrdinalIgnoreCase);
+
         foreach (var property in content.Properties)
         {
             try
             {
                 var value = property.GetValue(culture) ?? property.GetValue(null);
-                result[property.Alias] = SanitizeValue(value, culture, resolvePage, ancestors);
+
+                result[property.Alias] =
+                    isThumbnailCards
+                    && value is IEnumerable<Link> links
+                    && string.Equals(property.Alias, CmsConstants.ThumbnailCards.CardsAlias, StringComparison.OrdinalIgnoreCase)
+                        ? BuildThumbnailCards(links, culture, resolvePage, ancestors)
+                        : SanitizeValue(value, culture, resolvePage, ancestors);
             }
             catch (Exception ex)
             {
@@ -136,6 +149,61 @@ public sealed class ComponentMapper(
         }
         return result;
     }
+
+    // Builds the cards while the page is requested. Each link that picks a node (service, page...) becomes a card with
+    // the title, description, shape and tags of that node, and the link as the CTA. A link to somewhere else
+    // (manual or media) becomes a card with only the link, so nothing the editor added is lost.
+    private List<ThumbnailCardDto>? BuildThumbnailCards(
+        IEnumerable<Link> links,
+        string? culture,
+        Func<IPublishedContent, ISet<Guid>, PageDto> resolvePage,
+        ISet<Guid> ancestors)
+    {
+        var cards = links.TryGetNonEnumeratedCount(out var count) ? new List<ThumbnailCardDto>(count) : [];
+
+        foreach (var link in links)
+        {
+            // A link without an address is no use as a CTA, so it is sent as null.
+            var cta = string.IsNullOrWhiteSpace(link.Url) ? null : LinkMapper.Map(link);
+
+            var node = link.Type == LinkType.Content && link.Udi is GuidUdi udi ? contentQuery.Content(udi.Guid) : null;
+            if (node is null)
+            {
+                // Nothing to show at all (no title, no link): the card is left out.
+                if (Blank(link.Name) is null && cta is null) continue;
+
+                cards.Add(new ThumbnailCardDto { Title = Blank(link.Name), Cta = cta });
+                continue;
+            }
+
+            var tags = valueMapper.Raw(node, CmsConstants.ThumbnailCards.Tags, culture);
+            var mappedTags = tags is null ? null : SanitizeValue(tags, culture, resolvePage, ancestors);
+
+            // Each field comes only from the node's own field. An empty one is sent as null (no fallback).
+            cards.Add(new ThumbnailCardDto
+            {
+                Title = Blank(valueMapper.Text(node, CmsConstants.Fields.Title, culture)),
+                Description = Blank(valueMapper.Text(node, CmsConstants.ThumbnailCards.Description, culture)),
+
+                Shape = Blank(valueMapper.Text(node, CmsConstants.ThumbnailCards.BackgroundDecoration, culture)),
+
+                // No tags (a page, or a service without any) is null, not an empty list.
+                Tags = mappedTags switch
+                {
+                    null => null,
+                    string text when string.IsNullOrWhiteSpace(text) => null,
+                    System.Collections.ICollection { Count: 0 } => null,
+                    _ => mappedTags,
+                },
+                Cta = cta,
+            });
+        }
+
+        // No cards at all is null, not an empty list.
+        return cards.Count == 0 ? null : cards;
+    }
+
+    private static string? Blank(string? text) => string.IsNullOrWhiteSpace(text) ? null : text;
 
     private object? SanitizeValue(
         object? value,

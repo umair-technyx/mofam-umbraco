@@ -58,6 +58,18 @@ public static class CmsConstants
         public const string AdminEmail = "adminEmail";
     }
 
+    // The thumbnail cards section picks its cards with a link picker.
+    public static class ThumbnailCards
+    {
+        public const string SectionAlias = "thumbnailCardsSection";
+        public const string CardsAlias = "cardThumbnails"; 
+
+        // Fields read from the node picked for a card.
+        public const string Description = "description";
+        public const string Tags = "tags";
+        public const string BackgroundDecoration = "backgroundDecoration";
+    }
+
     public static class SeoFields
     {
         public const string MetaTitle = "metaTitle";
