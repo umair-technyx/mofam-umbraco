@@ -27,7 +27,7 @@ public static class CmsConstants
         public const string NewsCategory = "newsCategory";
         public const string NewsYearCategory = "newsYearCategory";
         public const string MediaYearCategory = "mediaYearCategory";
-        public const string ContactUsFormSettings = "contactUsFormSettings";
+        public const string WebsiteSettings = "websiteSettings";
         public const string ContactEmailTemplate = "contactEmailTemplate";
 
         // Content types with their own detail page (reached by slug). Any other type picked inside a page is shown in full.

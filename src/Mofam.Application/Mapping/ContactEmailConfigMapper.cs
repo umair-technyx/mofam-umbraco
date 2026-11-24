@@ -39,17 +39,17 @@ public sealed class ContactEmailConfigMapper(
             return null;
         }
 
-        var formSettings = siteRootResolver.FindChild(settingsRoot, CmsConstants.ContentTypes.ContactUsFormSettings);
+        var formSettings = siteRootResolver.FindChild(settingsRoot, CmsConstants.ContentTypes.WebsiteSettings);
         if (formSettings is null)
         {
-            failure = $"No published '{CmsConstants.ContentTypes.ContactUsFormSettings}' node was found under '{CmsConstants.RootAlias.Settings}'.";
+            failure = $"No published '{CmsConstants.ContentTypes.WebsiteSettings}' node was found under '{CmsConstants.RootAlias.Settings}'.";
             return null;
         }
 
         var adminEmail = valueMapper.Text(formSettings, CmsConstants.Fields.AdminEmail, culture)?.Trim();
         if (!CommonHelper.IsValidEmail(adminEmail))
         {
-            failure = $"The '{CmsConstants.Fields.AdminEmail}' property of the '{CmsConstants.ContentTypes.ContactUsFormSettings}' node is empty or not a valid email address.";
+            failure = $"The '{CmsConstants.Fields.AdminEmail}' property of the '{CmsConstants.ContentTypes.WebsiteSettings}' node is empty or not a valid email address.";
             return null;
         }
 
