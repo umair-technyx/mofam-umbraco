@@ -1,18 +1,23 @@
-using System.Text;
-using Google.Api.Gax;
-using Google.Api.Gax.Grpc;
-using Google.Api.Gax.ResourceNames;
-using Google.Apis.Auth.OAuth2;
-using Google.Cloud.RecaptchaEnterprise.V1;
+using System.Net.Http.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Options;
 using Mofam.Application.IServices;
 using Mofam.Domain.Options;
 using static Mofam.Domain.Constants.GeneralConstants;
 
 namespace Mofam.Application.Services;
-public sealed class RecaptchaService(IOptions<ReCaptchaOptions> options, Serilog.ILogger logger) : IRecaptchaService
+
+/// <summary>
+/// Checks a reCAPTCHA Enterprise token with the legacy secret key, through the siteverify endpoint.
+/// </summary>
+public sealed class RecaptchaService(HttpClient httpClient, IOptions<ReCaptchaOptions> options, Serilog.ILogger logger) : IRecaptchaService
 {
-    private readonly Lazy<RecaptchaEnterpriseServiceClient> _client = new(() => Build(options.Value), LazyThreadSafetyMode.ExecutionAndPublication);
+    private const string VerifyUrl = "https://www.google.com/recaptcha/api/siteverify";
+    private const string ExpectedAction = "submit";
+    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(5);
+
+    // Error codes that mean the server is set up wrong, not that the visitor failed the check.
+    private static readonly string[] ConfigurationErrors = ["missing-input-secret", "invalid-input-secret"];
 
     public async Task<RecaptchaResult> VerifyAsync(string? token, string? clientIp, CancellationToken cancellationToken)
     {
@@ -22,74 +27,88 @@ public sealed class RecaptchaService(IOptions<ReCaptchaOptions> options, Serilog
 
         if (!settings.IsConfigured)
         {
-            return new RecaptchaResult(RecaptchaStatus.Unavailable, "reCAPTCHA is turned on, but ProjectId, SiteKey or CredentialsJsonBase64 is not set.");
+            return new RecaptchaResult(RecaptchaStatus.Unavailable, "reCAPTCHA is turned on, but SiteKey or SecretKey is not set.");
         }
 
         if (string.IsNullOrWhiteSpace(token)) return new RecaptchaResult(RecaptchaStatus.Failed, "The token is missing.");
 
         try
         {
-            var request = new CreateAssessmentRequest
+            var form = new List<KeyValuePair<string, string>>
             {
-                ParentAsProjectName = new ProjectName(settings.ProjectId),
-                Assessment = new Assessment
-                {
-                    Event = new Google.Cloud.RecaptchaEnterprise.V1.Event
-                    {
-                        SiteKey = settings.SiteKey,
-                        Token = token,
-                        ExpectedAction = "submit",
-                        UserIpAddress = clientIp ?? string.Empty,
-                    },
-                },
+                new("secret", settings.SecretKey),
+                new("response", token),
             };
 
-            var callSettings = CallSettings
-                .FromCancellationToken(cancellationToken)
-                .MergedWith(CallSettings.FromExpiration(Expiration.FromTimeout(TimeSpan.FromSeconds(5))));
+            if (!string.IsNullOrWhiteSpace(clientIp)) form.Add(new("remoteip", clientIp));
 
-            var response = await _client.Value.CreateAssessmentAsync(request, callSettings);
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(Timeout);
 
-            if (!response.TokenProperties.Valid)
+            using var content = new FormUrlEncodedContent(form);
+            using var response = await httpClient.PostAsync(VerifyUrl, content, timeout.Token);
+
+            if (!response.IsSuccessStatusCode)
             {
-                return new RecaptchaResult(RecaptchaStatus.Failed, response.TokenProperties.InvalidReason.ToString());
+                logger.Error("The reCAPTCHA check could not be done. Google answered {StatusCode}.", (int)response.StatusCode);
+                return new RecaptchaResult(RecaptchaStatus.Unavailable, "The check could not be done.");
             }
 
-            if (!string.Equals(response.TokenProperties.Action, "submit", StringComparison.Ordinal))
+            var result = await response.Content.ReadFromJsonAsync<SiteVerifyResponse>(timeout.Token);
+
+            if (result is null)
+            {
+                logger.Error("The reCAPTCHA check could not be done. The answer from Google was empty.");
+                return new RecaptchaResult(RecaptchaStatus.Unavailable, "The check could not be done.");
+            }
+
+            if (!result.Success)
+            {
+                var errors = result.ErrorCodes ?? [];
+
+                if (errors.Any(e => ConfigurationErrors.Contains(e, StringComparer.Ordinal)))
+                {
+                    logger.Error("The reCAPTCHA secret key was rejected. ErrorCodes={ErrorCodes}", string.Join(",", errors));
+                    return new RecaptchaResult(RecaptchaStatus.Unavailable, "The check could not be done.");
+                }
+
+                return new RecaptchaResult(RecaptchaStatus.Failed, errors.Count > 0 ? string.Join(",", errors) : "The token is not valid.");
+            }
+
+            if (!string.Equals(result.Action, ExpectedAction, StringComparison.Ordinal))
             {
                 return new RecaptchaResult(RecaptchaStatus.Failed, "The action does not match.");
             }
 
-            var score = response.RiskAnalysis.Score;
+            if (settings.AllowedHostnames.Length > 0
+                && !settings.AllowedHostnames.Contains(result.Hostname ?? string.Empty, StringComparer.OrdinalIgnoreCase))
+            {
+                return new RecaptchaResult(RecaptchaStatus.Failed, "The hostname is not allowed.");
+            }
 
-            return score >= 0.5f
-                ? new RecaptchaResult(RecaptchaStatus.Passed, Score: score)
-                : new RecaptchaResult(RecaptchaStatus.Failed, "The score is too low.", score);
+            var score = result.Score ?? 0;
+
+            return score >= settings.MinimumScore
+                ? new RecaptchaResult(RecaptchaStatus.Passed, Score: (float)score)
+                : new RecaptchaResult(RecaptchaStatus.Failed, "The score is too low.", (float)score);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            // The visitor closed the page. This is normal and is not logged.
             throw;
-        }
-        catch (Grpc.Core.RpcException ex) when (ex.StatusCode == Grpc.Core.StatusCode.Cancelled && cancellationToken.IsCancellationRequested)
-        {
-            // The visitor closed the page: Google reports it as a gRPC "Cancelled" error. This is normal, so it is passed on as a cancel and is not logged.
-            throw new OperationCanceledException(cancellationToken);
         }
         catch (Exception ex)
         {
-            // Google was not reachable, or the credentials are wrong. The details stay in the log, the visitor gets a generic message.
+            // Google was not reachable, it timed out, or the answer could not be read. The details stay in the log, the visitor gets a generic message.
             logger.Error(ex, "The reCAPTCHA check could not be done.");
             return new RecaptchaResult(RecaptchaStatus.Unavailable, "The check could not be done.");
         }
     }
 
-    private static RecaptchaEnterpriseServiceClient Build(ReCaptchaOptions settings)
-    {
-        var json = Encoding.UTF8.GetString(Convert.FromBase64String(settings.CredentialsJsonBase64));
-
-        // The service account file is read into a credential that Google can use. A wrong file stops here.
-        var credential = CredentialFactory.FromJson<ServiceAccountCredential>(json).ToGoogleCredential();
-
-        return new RecaptchaEnterpriseServiceClientBuilder { GoogleCredential = credential }.Build();
-    }
+    private sealed record SiteVerifyResponse(
+        [property: JsonPropertyName("success")] bool Success,
+        [property: JsonPropertyName("score")] double? Score,
+        [property: JsonPropertyName("action")] string? Action,
+        [property: JsonPropertyName("hostname")] string? Hostname,
+        [property: JsonPropertyName("error-codes")] List<string>? ErrorCodes);
 }

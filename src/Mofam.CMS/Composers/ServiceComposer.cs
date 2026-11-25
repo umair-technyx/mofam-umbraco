@@ -54,7 +54,8 @@ public sealed class ServiceComposer : IComposer
 
         builder.Services.AddScoped<IContactEmailConfigMapper, ContactEmailConfigMapper>();
         builder.Services.AddScoped<IContactService, ContactService>();
-        builder.Services.AddSingleton<IRecaptchaService, RecaptchaService>();
+        // Typed HttpClient: calls the reCAPTCHA siteverify endpoint (timeout is set in RecaptchaService).
+        builder.Services.AddHttpClient<IRecaptchaService, RecaptchaService>();
 
         // The send timeout (15 seconds) is set in EmailHelper.
         builder.Services.AddHttpClient<EmailHelper>();
