@@ -182,7 +182,7 @@ public sealed class ComponentMapper(
             // Each field comes only from the node's own field. An empty one is sent as null (no fallback).
             cards.Add(new ThumbnailCardDto
             {
-                Title = Blank(valueMapper.Text(node, CmsConstants.Fields.Title, culture)),
+                Title = Blank(valueMapper.Text(node, CmsConstants.ThumbnailCards.Title, culture)),
                 Description = Blank(valueMapper.Text(node, CmsConstants.ThumbnailCards.Description, culture)),
 
                 Shape = Blank(valueMapper.Text(node, CmsConstants.ThumbnailCards.BackgroundDecoration, culture)),
