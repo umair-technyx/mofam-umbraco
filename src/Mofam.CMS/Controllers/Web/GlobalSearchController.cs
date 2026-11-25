@@ -12,7 +12,6 @@ namespace Mofam.CMS.Controllers.Web;
 [Route("api/web")]
 public sealed class GlobalSearchController(IGlobalSearchService globalSearchService) : ControllerBase
 {
-    // Typing (isSuggestion true): the suggestions. Otherwise "See all": one page of results.
     [HttpPost("global-search")]
     [ApiResponseValidationFilter]
     public ActionResult<ApiResponse<GlobalSearchDto>> GetGlobalSearch([FromBody] GlobalSearchRequest request)
