@@ -1,24 +1,13 @@
 using System.Net.Http.Json;
-using System.Text.Json.Serialization;
 using Microsoft.Extensions.Options;
 using Mofam.Application.IServices;
+using Mofam.Domain.Models.Dtos;
 using Mofam.Domain.Options;
 using static Mofam.Domain.Constants.GeneralConstants;
 
 namespace Mofam.Application.Services;
-
-/// <summary>
-/// Checks a reCAPTCHA Enterprise token with the legacy secret key, through the siteverify endpoint.
-/// </summary>
 public sealed class RecaptchaService(HttpClient httpClient, IOptions<ReCaptchaOptions> options, Serilog.ILogger logger) : IRecaptchaService
 {
-    private const string VerifyUrl = "https://www.google.com/recaptcha/api/siteverify";
-    private const string ExpectedAction = "submit";
-    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(5);
-
-    // Error codes that mean the server is set up wrong, not that the visitor failed the check.
-    private static readonly string[] ConfigurationErrors = ["missing-input-secret", "invalid-input-secret"];
-
     public async Task<RecaptchaResult> VerifyAsync(string? token, string? clientIp, CancellationToken cancellationToken)
     {
         var settings = options.Value;
@@ -34,6 +23,9 @@ public sealed class RecaptchaService(HttpClient httpClient, IOptions<ReCaptchaOp
 
         try
         {
+            // The siteverify endpoint of reCAPTCHA (it accepts the Enterprise legacy secret key).
+            const string verifyUrl = "https://www.google.com/recaptcha/api/siteverify";
+
             var form = new List<KeyValuePair<string, string>>
             {
                 new("secret", settings.SecretKey),
@@ -43,10 +35,10 @@ public sealed class RecaptchaService(HttpClient httpClient, IOptions<ReCaptchaOp
             if (!string.IsNullOrWhiteSpace(clientIp)) form.Add(new("remoteip", clientIp));
 
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeout.CancelAfter(Timeout);
+            timeout.CancelAfter(TimeSpan.FromSeconds(5));
 
             using var content = new FormUrlEncodedContent(form);
-            using var response = await httpClient.PostAsync(VerifyUrl, content, timeout.Token);
+            using var response = await httpClient.PostAsync(verifyUrl, content, timeout.Token);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -66,7 +58,8 @@ public sealed class RecaptchaService(HttpClient httpClient, IOptions<ReCaptchaOp
             {
                 var errors = result.ErrorCodes ?? [];
 
-                if (errors.Any(e => ConfigurationErrors.Contains(e, StringComparer.Ordinal)))
+                // These error codes mean the server is set up wrong, not that the visitor failed the check.
+                if (errors.Any(e => e is "missing-input-secret" or "invalid-input-secret"))
                 {
                     logger.Error("The reCAPTCHA secret key was rejected. ErrorCodes={ErrorCodes}", string.Join(",", errors));
                     return new RecaptchaResult(RecaptchaStatus.Unavailable, "The check could not be done.");
@@ -75,7 +68,7 @@ public sealed class RecaptchaService(HttpClient httpClient, IOptions<ReCaptchaOp
                 return new RecaptchaResult(RecaptchaStatus.Failed, errors.Count > 0 ? string.Join(",", errors) : "The token is not valid.");
             }
 
-            if (!string.Equals(result.Action, ExpectedAction, StringComparison.Ordinal))
+            if (!string.Equals(result.Action, "submit", StringComparison.Ordinal))
             {
                 return new RecaptchaResult(RecaptchaStatus.Failed, "The action does not match.");
             }
@@ -94,21 +87,12 @@ public sealed class RecaptchaService(HttpClient httpClient, IOptions<ReCaptchaOp
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            // The visitor closed the page. This is normal and is not logged.
             throw;
         }
         catch (Exception ex)
         {
-            // Google was not reachable, it timed out, or the answer could not be read. The details stay in the log, the visitor gets a generic message.
             logger.Error(ex, "The reCAPTCHA check could not be done.");
             return new RecaptchaResult(RecaptchaStatus.Unavailable, "The check could not be done.");
         }
     }
-
-    private sealed record SiteVerifyResponse(
-        [property: JsonPropertyName("success")] bool Success,
-        [property: JsonPropertyName("score")] double? Score,
-        [property: JsonPropertyName("action")] string? Action,
-        [property: JsonPropertyName("hostname")] string? Hostname,
-        [property: JsonPropertyName("error-codes")] List<string>? ErrorCodes);
 }

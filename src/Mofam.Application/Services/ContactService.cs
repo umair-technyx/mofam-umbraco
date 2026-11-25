@@ -92,7 +92,6 @@ public sealed partial class ContactService(
                 break;
 
             default:
-                // An unknown status must never let the message through: fail closed.
                 logger.Error("Contact submission {Reference} got an unknown reCAPTCHA status {Status}.", reference, captcha.Status);
                 throw Unavailable();
         }
