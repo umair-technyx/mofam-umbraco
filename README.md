@@ -48,7 +48,7 @@ Main `appsettings.json` sections (in Key Vault, use `--` between levels, e.g. `R
 | `Cache` | Cache on/off and durations for site root, pages, 404s, startup, filters and contact settings |
 | `Cors:AllowedOrigins` | Allowed browser origins (empty = none) |
 | `BackOfficeEntraId` | Entra ID login: tenant, client, secret, callback paths, `DenyLocalLogin`, `ExtraGroups` |
-| `GoogleReCaptcha` | reCAPTCHA Enterprise legacy verification: `Enabled`, `SiteKey` (Enterprise site key), `SecretKey` (Enterprise legacy secret key, keep it in Key Vault or user secrets, never in the repo) and `MinimumScore` (default `0.5`) and `AllowedHostnames` (front end hosts a token may come from; empty = not checked here, so also restrict the allowed domains of the key in the Google console). The backend checks the token at `https://www.google.com/recaptcha/api/siteverify`. The front end still loads `enterprise.js?render=<SiteKey>` and calls `grecaptcha.enterprise.execute('<SiteKey>', { action: 'submit' })` |
+| `GoogleReCaptcha` | reCAPTCHA Enterprise (legacy `siteverify`): `Enabled`, `SiteKey`, `SecretKey` (keep in Key Vault, never in the repo), `MinimumScore` (default `0.5`), `AllowedHostnames` (front end hosts; empty = not checked) |
 | `EmailSettings` | Sender, SMTP or SendGrid |
 | `LogStorage` | Azure Blob containers for application and Umbraco logs |
 | `Sentry` | Optional error tracking (`Enabled` + `Dsn`) |
