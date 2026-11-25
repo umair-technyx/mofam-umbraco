@@ -32,6 +32,7 @@ public sealed class ServiceComposer : IComposer
         builder.Services.AddScoped<IMediaUrlBuilder, MediaUrlBuilder>();
         // Required: SearchController takes ISiteSearchService in its constructor, so it must be registered.
         builder.Services.AddScoped<ISiteSearchService, SiteSearchService>();
+        builder.Services.AddScoped<IGlobalSearchService, GlobalSearchService>();
         builder.Services.AddScoped<IFilterService, FilterService>();
         builder.Services.AddScoped<IDatabaseConnectivityService, DatabaseConnectivityService>();
 

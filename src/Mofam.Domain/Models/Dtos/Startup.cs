@@ -9,6 +9,10 @@ public sealed record Startup
     public string? Culture { get; init; }
     public required HeaderDto Header { get; init; }
     public required FooterDto Footer { get; init; }
+
+    // The "Can't find it?" links of the global search (call, live chat, find a centre).
+    public IReadOnlyList<SearchItemDto> GlobalSearch { get; init; } = [];
+
     public required ScriptsDto Scripts { get; init; }
 
     // Dictionary key and its translated value for the requested culture.
@@ -51,6 +55,20 @@ public sealed record FooterDto
     public IReadOnlyList<IReadOnlyDictionary<string, object?>> SocialLinks { get; init; } = [];
     public string? FollowUsLabel { get; init; }
     public string? BottomText { get; init; }
+}
+
+#endregion
+
+#region Global search
+
+public sealed record SearchItemDto
+{
+    public string? Title { get; init; }
+
+    /// <summary>The slug of the picked node. Null for an external or media link.</summary>
+    public string? Slug { get; init; }
+
+    public LinkDto? Cta { get; init; }
 }
 
 #endregion

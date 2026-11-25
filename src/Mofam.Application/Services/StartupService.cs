@@ -61,6 +61,7 @@ public sealed class StartupService(
             Scripts = BuildScripts(site, culture),
             Dictionary = await GetDictionaryAsync(culture),
             ContentTypes = CmsConstants.ContentTypes.PageTypes,
+            GlobalSearch = GlobalSearchLinks(site, culture),
         };
     }
 
@@ -95,6 +96,30 @@ public sealed class StartupService(
         FollowUsLabel = valueMapper.Text(site, CmsConstants.SiteFields.FollowUsLabel, culture),
         SocialLinks = valueMapper.BlockListItems(site, CmsConstants.SiteFields.SocialLinks, culture),
     };
+
+    #endregion
+
+    #region Global search
+
+    // The links picked in the Global Search Content tab. A link without a title or an address is skipped.
+    private IReadOnlyList<SearchItemDto> GlobalSearchLinks(IPublishedContent site, string? culture)
+    {
+        if (valueMapper.Raw(site, CmsConstants.SiteFields.HelpLinks, culture) is not IEnumerable<Link> links) return [];
+
+        var items = new List<SearchItemDto>();
+        foreach (var link in links)
+        {
+            var title = string.IsNullOrWhiteSpace(link.Name) ? null : link.Name;
+            if (title is null || string.IsNullOrWhiteSpace(link.Url)) continue;
+
+            var node = link.Type == LinkType.Content && link.Udi is GuidUdi udi ? contentQuery.Content(udi.Guid) : null;
+            var slug = node is null ? null : valueMapper.Text(node, CmsConstants.Fields.Slug, culture);
+
+            items.Add(new SearchItemDto { Title = title, Slug = string.IsNullOrWhiteSpace(slug) ? null : slug, Cta = LinkMapper.Map(link) });
+        }
+
+        return items;
+    }
 
     #endregion
 
@@ -243,6 +268,7 @@ public sealed class StartupService(
         }
     }
 
+
     // Find the translation for the culture. Try the exact code first (en-US),
     // then the language only (en), and if nothing matches use the first one.
     private static string? Translate(IDictionaryItem item, string? culture)
@@ -264,6 +290,5 @@ public sealed class StartupService(
 
         return translations[0].Value;
     }
-
     #endregion
 }

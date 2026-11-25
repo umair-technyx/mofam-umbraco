@@ -47,6 +47,7 @@ public static class CmsConstants
         public const string Components = "components";
         public const string Slug = "slug";
         public const string Title = "title";
+        public const string Description = "description";
         public const string Categories = "categories";
         public const string Year = "year";
         public const string MediaSection = "mediaSection";
@@ -65,6 +66,7 @@ public static class CmsConstants
         public const string CardsAlias = "cardThumbnails"; 
 
         // Fields read from the node picked for a card.
+        public const string Title = "title";
         public const string Description = "description";
         public const string Tags = "tags";
         public const string BackgroundDecoration = "backgroundDecoration";
@@ -145,6 +147,9 @@ public static class CmsConstants
 
         // Scripts Content tab
         public const string AccessibilityScript = "accessibilityScript";
+
+        // Global Search Content tab
+        public const string HelpLinks = "helpLinks";
     }
 
     public static class Http
