@@ -86,6 +86,14 @@ public sealed partial class ContactService(
             case RecaptchaStatus.Unavailable:
                 logger.Error("Contact submission {Reference} could not be checked by reCAPTCHA. Reason={Reason}", reference, captcha.Reason);
                 throw Unavailable();
+
+            case RecaptchaStatus.Passed:
+            case RecaptchaStatus.Skipped:
+                break;
+
+            default:
+                logger.Error("Contact submission {Reference} got an unknown reCAPTCHA status {Status}.", reference, captcha.Status);
+                throw Unavailable();
         }
 
         #endregion

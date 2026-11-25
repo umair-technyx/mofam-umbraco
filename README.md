@@ -48,7 +48,7 @@ Main `appsettings.json` sections (in Key Vault, use `--` between levels, e.g. `R
 | `Cache` | Cache on/off and durations for site root, pages, 404s, startup, filters and contact settings |
 | `Cors:AllowedOrigins` | Allowed browser origins (empty = none) |
 | `BackOfficeEntraId` | Entra ID login: tenant, client, secret, callback paths, `DenyLocalLogin`, `ExtraGroups` |
-| `GoogleReCaptcha` | reCAPTCHA Enterprise project, site key and credentials |
+| `GoogleReCaptcha` | reCAPTCHA Enterprise: `Enabled`, `VerifyViaSecretKey` (true or missing = `siteverify` with `SiteKey` + `SecretKey`; false = assessments API with `ProjectId` + `SiteKey` + `CredentialsJsonBase64`). Keep secrets in Key Vault |
 | `EmailSettings` | Sender, SMTP or SendGrid |
 | `LogStorage` | Azure Blob containers for application and Umbraco logs |
 | `Sentry` | Optional error tracking (`Enabled` + `Dsn`) |
