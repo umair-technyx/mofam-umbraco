@@ -14,6 +14,7 @@
     <PackageReference Include="HtmlSanitizer" />
     <PackageReference Include="MailKit" />
     <PackageReference Include="SendGrid" />
+    <PackageReference Include="Google.Cloud.RecaptchaEnterprise.V1" />
   </ItemGroup>
 
   <!-- Some types, like IPublishedContentQuery, are not in the Umbraco.Cms.Core package.
