@@ -7,5 +7,4 @@ public sealed record SiteVerifyResponse(
     [property: JsonPropertyName("success")] bool Success,
     [property: JsonPropertyName("score")] double? Score,
     [property: JsonPropertyName("action")] string? Action,
-    [property: JsonPropertyName("hostname")] string? Hostname,
     [property: JsonPropertyName("error-codes")] List<string>? ErrorCodes);
