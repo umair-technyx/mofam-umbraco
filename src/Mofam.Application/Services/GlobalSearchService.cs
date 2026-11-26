@@ -235,12 +235,14 @@ public sealed class GlobalSearchService(
         {
             Title = hit.Title,
             Description = Blank(valueMapper.Text(hit.Node, CmsConstants.Fields.Description, culture)),
-            PageCategory = PageCategory(hit.Node, culture),
+            PageTag = PageTag(hit.Node, culture),
             Category = category,
             Slug = Blank(valueMapper.Text(hit.Node, CmsConstants.Fields.Slug, culture)),
 
-            // Umbraco gives "#" when the node has no URL.
-            Cta = string.IsNullOrWhiteSpace(url) || url == "#" ? null : new LinkDto { Url = url, Name = hit.Title },
+            // No CTA when "Hide CTA" is on for the node (Card Settings), or when it has no URL (Umbraco gives "#").
+            Cta = HidesCta(hit.Node, culture) || string.IsNullOrWhiteSpace(url) || url == "#"
+                ? null
+                : new LinkDto { Url = url, Name = hit.Title },
         };
     }
 
@@ -248,19 +250,23 @@ public sealed class GlobalSearchService(
 
     private static string? Blank(string? text) => string.IsNullOrWhiteSpace(text) ? null : text;
 
-    // The title of the Page Category picked (the first one), or null.
-    private string? PageCategory(IPublishedContent node, string culture)
+    // True when "Hide CTA" is turned on for the node. A type without the field shows the CTA.
+    private bool HidesCta(IPublishedContent node, string culture) =>
+        valueMapper.Raw(node, CmsConstants.ThumbnailCards.HideCta, culture) is true;
+
+    // The title of the Page Tag picked (the first one), or null.
+    private string? PageTag(IPublishedContent node, string culture)
     {
-        var category = valueMapper.Raw(node, GlobalSearchConstants.PageCategoryAlias, culture) switch
+        var tag = valueMapper.Raw(node, GlobalSearchConstants.PageTagAlias, culture) switch
         {
             IPublishedContent one => one,
             IEnumerable<IPublishedContent> many => many.FirstOrDefault(),
             _ => null,
         };
 
-        return category is null
+        return tag is null
             ? null
-            : Blank(valueMapper.Text(category, CmsConstants.Fields.Title, culture)) ?? Blank(NodeName(category, culture));
+            : Blank(valueMapper.Text(tag, CmsConstants.Fields.Title, culture)) ?? Blank(NodeName(tag, culture));
     }
 
     private static string NodeName(IPublishedContent node, string culture) =>

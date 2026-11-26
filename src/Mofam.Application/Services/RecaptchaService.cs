@@ -106,7 +106,7 @@ public sealed class RecaptchaService(IHttpClientFactory httpClientFactory, IOpti
 
         return score >= 0.5
             ? new RecaptchaResult(RecaptchaStatus.Passed, Score: (float)score)
-            : new RecaptchaResult(RecaptchaStatus.Failed, "The score is too low.", (float)score);
+            : new RecaptchaResult(RecaptchaStatus.LowScore, "The score is too low.", (float)score);
     }
 
     private async Task<RecaptchaResult> VerifyWithAssessmentAsync(ReCaptchaOptions settings, string token, string? clientIp, CancellationToken cancellationToken)
@@ -146,7 +146,7 @@ public sealed class RecaptchaService(IHttpClientFactory httpClientFactory, IOpti
 
         return score >= 0.5
             ? new RecaptchaResult(RecaptchaStatus.Passed, Score: score)
-            : new RecaptchaResult(RecaptchaStatus.Failed, "The score is too low.", score);
+            : new RecaptchaResult(RecaptchaStatus.LowScore, "The score is too low.", score);
     }
 
     private static RecaptchaEnterpriseServiceClient Build(ReCaptchaOptions settings)

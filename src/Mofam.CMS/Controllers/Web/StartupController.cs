@@ -16,7 +16,7 @@ public sealed class StartupController(IStartupService startupService) : Controll
         var supported = CmsConstants.Cultures.Resolve(culture);
         if (supported is null)
         {
-            return NotFound(ApiResponse<Startup>.NotFound("Culture not supported."));
+            return BadRequest(ApiResponse<Startup>.BadRequest("Culture not supported."));
         }
 
         var startup = await startupService.GetStartupAsync(supported);

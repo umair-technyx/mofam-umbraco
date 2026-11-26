@@ -16,7 +16,7 @@ public sealed class PageController(IApiService apiService) : ControllerBase
         var supported = CmsConstants.Cultures.Resolve(culture);
         if (supported is null)
         {
-            return NotFound(ApiResponse<PageDto>.NotFound("Culture not supported."));
+            return BadRequest(ApiResponse<PageDto>.BadRequest("Culture not supported."));
         }
 
         var page = apiService.GetPageBySlug(contentType, slug, supported);

@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Mofam.Application.IServices;
 using Mofam.Domain.Constants;
@@ -21,13 +22,20 @@ public sealed class FilterController(IFilterService filterService) : ControllerB
         var supported = CmsConstants.Cultures.Resolve(culture);
         if (supported is null)
         {
-            return NotFound(ApiResponse<FilterDataDto>.NotFound("Culture not supported."));
+            return BadRequest(ApiResponse<FilterDataDto>.BadRequest("Culture not supported."));
         }
 
-        var data = filterService.GetFilterData(contentType, supported);
+        // A content type without filters is a wrong request, not an empty result.
+        if (!SearchConstants.FilterDefinitions.ContainsKey(contentType.Trim()))
+        {
+            return BadRequest(ApiResponse<FilterDataDto>.BadRequest("Content type not supported."));
+        }
+
+        // A content type that has filters but no values gives an empty list (200). Null here means the server failed (the error is logged in the service).
+        var data = filterService.GetFilterData(contentType.Trim(), supported);
 
         return data is null
-            ? NotFound(ApiResponse<FilterDataDto>.NotFound("No filter data found."))
+            ? StatusCode(StatusCodes.Status500InternalServerError, ApiResponse<FilterDataDto>.InternalServerError(GeneralConstants.UnexpectedErrorMessage))
             : Ok(ApiResponse<FilterDataDto>.Ok(data, "Filter data fetched successfully."));
     }
 }
