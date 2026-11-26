@@ -235,7 +235,7 @@ public sealed class GlobalSearchService(
         {
             Title = hit.Title,
             Description = Blank(valueMapper.Text(hit.Node, CmsConstants.Fields.Description, culture)),
-            PageType = PageType(hit.Node, culture),
+            PageCategory = PageCategory(hit.Node, culture),
             Category = category,
             Slug = Blank(valueMapper.Text(hit.Node, CmsConstants.Fields.Slug, culture)),
 
@@ -249,7 +249,7 @@ public sealed class GlobalSearchService(
     private static string? Blank(string? text) => string.IsNullOrWhiteSpace(text) ? null : text;
 
     // The title of the Page Category picked (the first one), or null.
-    private string? PageType(IPublishedContent node, string culture)
+    private string? PageCategory(IPublishedContent node, string culture)
     {
         var category = valueMapper.Raw(node, GlobalSearchConstants.PageCategoryAlias, culture) switch
         {
