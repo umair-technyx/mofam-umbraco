@@ -151,7 +151,7 @@ public sealed class ComponentMapper(
     }
 
     // Builds the cards while the page is requested. Each link that picks a node (service, page...) becomes a card with
-    // the title, description, shape and tags of that node, and the link as the CTA. A link to somewhere else
+    // the title, description, shape and tags of that node, and the link as the CTA (unless the node has "Hide CTA" on). A link to somewhere else
     // (manual or media) becomes a card with only the link, so nothing the editor added is lost.
     private List<ThumbnailCardDto>? BuildThumbnailCards(
         IEnumerable<Link> links,
@@ -176,6 +176,9 @@ public sealed class ComponentMapper(
                 continue;
             }
 
+            // The editor can hide the CTA of a node in its "Card Settings". The rest of the card is still sent.
+            var hideCta = valueMapper.Raw(node, CmsConstants.ThumbnailCards.HideCta, culture) is true;
+
             var tags = valueMapper.Raw(node, CmsConstants.ThumbnailCards.Tags, culture);
             var mappedTags = tags is null ? null : SanitizeValue(tags, culture, resolvePage, ancestors);
 
@@ -195,7 +198,7 @@ public sealed class ComponentMapper(
                     System.Collections.ICollection { Count: 0 } => null,
                     _ => mappedTags,
                 },
-                Cta = cta,
+                Cta = hideCta ? null : cta,
             });
         }
 
