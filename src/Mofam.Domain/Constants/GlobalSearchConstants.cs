@@ -15,8 +15,8 @@ public static class GlobalSearchConstants
         CmsConstants.ContentTypes.Page,
     ];
 
-    // The Page Category field of the items (service, guidance, news...).
-    public const string PageCategoryAlias = "pageCategory";
+    // The Page Tag field of the items (for example "Guidance"). The tags are the Page Tags data source.
+    public const string PageTagAlias = "pageTag";
 
     // The fields the text is matched against.
     public static readonly string[] SearchableFields = [CmsConstants.Fields.Title, CmsConstants.Fields.Description];
@@ -42,6 +42,6 @@ public static class GlobalSearchConstants
     public const string UpdateDateField = "updateDate";
 
     // The least characters to search, and how many suggestions to show.
-    public const int MinQueryLength = 4;
+    public const int MinQueryLength = 3;
     public const int SuggestedSearchCount = 3;
 }
