@@ -1,0 +1,23 @@
+{
+  "$schema": "../../../umbraco-package-schema.json",
+  "name": "Mofam Form Submission",
+  "id": "Mofam.FormSubmission",
+  "version": "1.0.16",
+  "extensions": [
+    {
+      "type": "dashboard",
+      "alias": "Mofam.Dashboard.FormSubmission",
+      "name": "Form Submissions",
+      "element": "/App_Plugins/FormSubmission/form-submission-dashboard.js",
+      "weight": 5,
+      "meta": {
+        "label": "Form Submissions",
+        "pathname": "form-submissions"
+      },
+      "conditions": [
+        { "alias": "Umb.Condition.SectionAlias", "match": "Umb.Section.Content" },
+        { "alias": "Umb.Condition.CurrentUser.IsAdmin" }
+      ]
+    }
+  ]
+}

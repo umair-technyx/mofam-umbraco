@@ -29,6 +29,7 @@ public static class CmsConstants
         public const string MediaYearCategory = "mediaYearCategory";
         public const string WebsiteSettings = "websiteSettings";
         public const string ContactEmailTemplate = "contactEmailTemplate";
+        public const string NewsletterEmailTemplate = "newsletterEmailTemplate";
 
         // Content types with their own detail page (reached by slug). Any other type picked inside a page is shown in full.
         public static readonly string[] PageTypes = [Page, Service, ServiceCategory];
@@ -57,6 +58,9 @@ public static class CmsConstants
         public const string EmailSubject = "emailSubject";
         public const string AdminEmailHtml = "adminEmailHtml";
         public const string AdminEmail = "adminEmail";
+        public const string ContactUsSendEmail = "contactUsSendEmail";
+        public const string NewsletterSendEmail = "newsletterSendEmail";
+        public const string UserEmailHtml = "userEmailHtml";
     }
 
     // The thumbnail cards section picks its cards with a link picker.

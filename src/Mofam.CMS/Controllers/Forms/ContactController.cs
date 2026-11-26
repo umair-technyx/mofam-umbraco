@@ -11,7 +11,7 @@ namespace Mofam.CMS.Controllers.Forms;
 [ApiController]
 [Route("api/web/form")]
 [ApiResponseValidationFilter]
-public sealed class FormsController(IContactService contactService) : ControllerBase
+public sealed class ContactController(IContactService contactService) : ControllerBase
 {
     [HttpPost("{culture}/contact")]
     [Consumes("application/json")]
@@ -23,7 +23,6 @@ public sealed class FormsController(IContactService contactService) : Controller
             return BadRequest(ApiResponse<ContactReceiptDto>.BadRequest("Culture not supported."));
         }
 
-        // A bad body (empty, a wrong field, a field that fails its rule) is answered by ApiResponseValidationFilter before this runs.
         var receipt = await contactService.SubmitAsync(request, supported, HttpContext.Connection.RemoteIpAddress?.ToString(), HttpContext.TraceIdentifier, cancellationToken);
 
         return Ok(ApiResponse<ContactReceiptDto>.Ok(receipt, "Your message has been sent successfully.") with { TraceId = receipt.Reference });
