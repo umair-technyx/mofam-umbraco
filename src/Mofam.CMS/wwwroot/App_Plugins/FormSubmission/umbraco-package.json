@@ -2,7 +2,7 @@
   "$schema": "../../../umbraco-package-schema.json",
   "name": "Mofam Form Submission",
   "id": "Mofam.FormSubmission",
-  "version": "1.0.16",
+  "version": "1.0.24",
   "extensions": [
     {
       "type": "dashboard",
