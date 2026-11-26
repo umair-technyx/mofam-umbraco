@@ -74,6 +74,10 @@ public sealed partial class ContactService(
 
         switch (captcha.Status)
         {
+            case RecaptchaStatus.LowScore:
+                logger.Information("Contact submission {Reference} was blocked by reCAPTCHA. Score={Score}", reference, captcha.Score);
+                throw new HttpStatusException(HttpStatusCode.Forbidden, "The security check failed. Please try again.");
+
             case RecaptchaStatus.Failed:
                 logger.Information(
                     "Contact submission {Reference} failed the security check. Reason={Reason}, Score={Score}",

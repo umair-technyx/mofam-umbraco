@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Mofam.Application.Helpers;
 using Mofam.Application.IServices;
 using Mofam.Domain.Constants;
+using Mofam.Domain.Models.Common;
 using Umbraco.Cms.Api.Management.Controllers;
 using Umbraco.Cms.Api.Management.Routing;
 
@@ -17,7 +18,7 @@ public sealed class FormExportController(IContactSubmissionService contactServic
     public async Task<IActionResult> ExportContactSubmissions([FromQuery] string? culture)
     {
         var supported = CmsConstants.Cultures.Resolve(culture?.Trim());
-        if (supported is null) return BadRequest("Culture is required and must be en or ar.");
+        if (supported is null) return BadRequest(ApiResponse<object>.BadRequest("Culture is required and must be en or ar."));
 
         var rows = await contactService.GetAllAsync(supported);
         if (rows.Count == 0) return NoContent();
@@ -32,7 +33,7 @@ public sealed class FormExportController(IContactSubmissionService contactServic
     public async Task<IActionResult> ExportNewsletterSubscribers([FromQuery] string? culture)
     {
         var supported = CmsConstants.Cultures.Resolve(culture?.Trim());
-        if (supported is null) return BadRequest("Culture is required and must be en or ar.");
+        if (supported is null) return BadRequest(ApiResponse<object>.BadRequest("Culture is required and must be en or ar."));
 
         var rows = await newsletterService.GetAllAsync(supported);
         if (rows.Count == 0) return NoContent();

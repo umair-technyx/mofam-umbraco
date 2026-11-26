@@ -60,6 +60,10 @@ public sealed partial class NewsletterService(
 
         switch (captcha.Status)
         {
+            case RecaptchaStatus.LowScore:
+                logger.Information("Newsletter subscription {Reference} was blocked by reCAPTCHA. Score={Score}", reference, captcha.Score);
+                throw new HttpStatusException(HttpStatusCode.Forbidden, "The security check failed. Please try again.");
+
             case RecaptchaStatus.Failed:
                 logger.Information(
                     "Newsletter subscription {Reference} failed the security check. Reason={Reason}, Score={Score}",

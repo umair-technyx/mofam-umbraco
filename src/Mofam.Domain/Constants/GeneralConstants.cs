@@ -55,8 +55,11 @@ public static class GeneralConstants
         // The token is valid, and the score is high enough.
         Passed,
 
-        // The token is missing, wrong, for another action, or the score is too low.
+        // The token is missing, wrong or for another action (400).
         Failed,
+
+        // The token is valid, but the score is too low: the request looks like a bot (403).
+        LowScore,
 
         // Google could not be reached, or reCAPTCHA is turned on but not set up.
         Unavailable,
