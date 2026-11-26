@@ -29,6 +29,7 @@ public static class CmsConstants
         public const string MediaYearCategory = "mediaYearCategory";
         public const string WebsiteSettings = "websiteSettings";
         public const string ContactEmailTemplate = "contactEmailTemplate";
+        public const string NewsletterEmailTemplate = "newsletterEmailTemplate";
 
         // Content types with their own detail page (reached by slug). Any other type picked inside a page is shown in full.
         public static readonly string[] PageTypes = [Page, Service, ServiceCategory];
@@ -57,6 +58,9 @@ public static class CmsConstants
         public const string EmailSubject = "emailSubject";
         public const string AdminEmailHtml = "adminEmailHtml";
         public const string AdminEmail = "adminEmail";
+        public const string ContactUsSendEmail = "contactUsSendEmail";
+        public const string NewsletterSendEmail = "newsletterSendEmail";
+        public const string UserEmailHtml = "userEmailHtml";
     }
 
     // The thumbnail cards section picks its cards with a link picker.
@@ -70,6 +74,9 @@ public static class CmsConstants
         public const string Description = "description";
         public const string Tags = "tags";
         public const string BackgroundDecoration = "backgroundDecoration";
+
+        // The "Hide CTA" toggle of the node (the "Card Settings" composition). On: the card has no CTA.
+        public const string HideCta = "hideCta";
     }
 
     public static class SeoFields
@@ -150,6 +157,14 @@ public static class CmsConstants
 
         // Global Search Content tab
         public const string HelpLinks = "helpLinks";
+        public const string LifeStagesLinks = "lifeStagesLinks";
+    }
+
+    // The "Icon with CTA" element type of the Global Search life stage links block list.
+    public static class LifeStageLinkBlock
+    {
+        public const string Icon = "icon";
+        public const string Cta = "cta";
     }
 
     public static class Http

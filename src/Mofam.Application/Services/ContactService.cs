@@ -14,6 +14,7 @@ namespace Mofam.Application.Services;
 
 public sealed partial class ContactService(
     IContactEmailConfigMapper configMapper,
+    IContactSubmissionService submissionService,
     EmailHelper emailHelper,
     IRecaptchaService recaptchaService,
     Serilog.ILogger logger) : IContactService
@@ -98,18 +99,29 @@ public sealed partial class ContactService(
 
         #endregion
 
-        return await SendAsync(data, culture, reference);
+        // The entry is saved first, so it is kept even when the email is off or fails.
+        var id = await submissionService.SaveAsync(data, culture);
+        logger.Information("Contact submission {Reference} was saved. Id={Id}, Culture={Culture}", reference, id, culture);
+
+        if (!configMapper.IsEmailEnabled(culture))
+        {
+            logger.Information("Contact submission {Reference} was not emailed: the contact email is off in the website settings. Id={Id}", reference, id);
+            return new ContactReceiptDto(reference);
+        }
+
+        return await SendAsync(data, culture, reference, id);
     }
 
-    private async Task<ContactReceiptDto> SendAsync(ContactRequest data, string culture, string reference)
+    // The entry is already saved here, so a problem with the email is logged and the visitor is not told it failed.
+    private async Task<ContactReceiptDto> SendAsync(ContactRequest data, string culture, string reference, int id)
     {
         #region Content and sender
 
         var config = configMapper.TryGet(culture, out var failure);
         if (config is null)
         {
-            logger.Error("Contact submission {Reference} cannot be sent. Culture={Culture}. {Reason}", reference, culture, failure);
-            throw Unavailable();
+            logger.Error("Contact submission {Reference} was saved (Id={Id}) but cannot be emailed. Culture={Culture}. {Reason}", reference, id, culture, failure);
+            return new ContactReceiptDto(reference);
         }
 
         var subject = config.AdminSubject ?? string.Empty;
@@ -130,9 +142,26 @@ public sealed partial class ContactService(
 
         #endregion
 
-        await emailHelper.SendAsync(config.AdminEmail, data.Email, subject, body, null, reference, CancellationToken.None);
+        try
+        {
+            await emailHelper.SendAsync(config.AdminEmail, data.Email, subject, body, null, reference, CancellationToken.None);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.Error(ex, "Contact submission {Reference} was saved (Id={Id}) but the email failed. Culture={Culture}", reference, id, culture);
+            return new ContactReceiptDto(reference);
+        }
 
-        logger.Information("Contact submission {Reference} was sent. Culture={Culture}", reference, culture);
+        logger.Information("Contact submission {Reference} was sent. Id={Id}, Culture={Culture}", reference, id, culture);
+
+        try
+        {
+            await submissionService.MarkEmailSentAsync(id);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.Warning(ex, "Contact submission {Reference} was emailed but EmailSent could not be set. Id={Id}", reference, id);
+        }
 
         return new ContactReceiptDto(reference);
     }

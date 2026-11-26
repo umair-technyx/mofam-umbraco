@@ -4,4 +4,6 @@ public sealed record ContactEmailConfig(string AdminEmail, string AdminSubject, 
 public interface IContactEmailConfigMapper
 {
     ContactEmailConfig? TryGet(string culture, out string? failure);
+ 
+    bool IsEmailEnabled(string culture);
 }

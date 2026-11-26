@@ -10,6 +10,7 @@ using Serilog;
 using System.Globalization;
 using Umbraco.Cms.Core;
 using Umbraco.Cms.Core.Models;
+using Umbraco.Cms.Core.Models.Blocks;
 using Umbraco.Cms.Core.Models.PublishedContent;
 using Umbraco.Cms.Core.Services;
 using Umbraco.Extensions;
@@ -101,8 +102,46 @@ public sealed class StartupService(
 
     #region Global search
 
-    // The links picked in the Global Search Content tab. A link without a title or an address is skipped.
+    // The life stage links of the Global Search Content tab: a block list of icon + CTA.
+    // When the block list is empty, the older plain link picker is used, so nothing disappears while the CMS is being filled.
     private IReadOnlyList<SearchItemDto> GlobalSearchLinks(IPublishedContent site, string? culture)
+    {
+        var blocks = LifeStageLinkBlocks(site, culture);
+        return blocks.Count > 0 ? blocks : PickedHelpLinks(site, culture);
+    }
+
+    private IReadOnlyList<SearchItemDto> LifeStageLinkBlocks(IPublishedContent site, string? culture)
+    {
+        if (valueMapper.Raw(site, CmsConstants.SiteFields.LifeStagesLinks, culture) is not BlockListModel blocks) return [];
+
+        var items = new List<SearchItemDto>();
+        foreach (var block in blocks)
+        {
+            var cta = valueMapper.Links(block.Content, CmsConstants.LifeStageLinkBlock.Cta, culture).FirstOrDefault();
+            if (cta is null || string.IsNullOrWhiteSpace(cta.Name) || string.IsNullOrWhiteSpace(cta.Url)) continue;
+
+            var link = valueMapper.Raw(block.Content, CmsConstants.LifeStageLinkBlock.Cta, culture) is IEnumerable<Link> many ? many.FirstOrDefault() : null;
+            items.Add(new SearchItemDto
+            {
+                Title = cta.Name,
+                Slug = SlugOf(link, culture),
+                Icon = valueMapper.Media(block.Content, CmsConstants.LifeStageLinkBlock.Icon, culture),
+                Cta = cta,
+            });
+        }
+
+        return items;
+    }
+
+    private string? SlugOf(Link? link, string? culture)
+    {
+        var node = link is { Type: LinkType.Content, Udi: GuidUdi udi } ? contentQuery.Content(udi.Guid) : null;
+        var slug = node is null ? null : valueMapper.Text(node, CmsConstants.Fields.Slug, culture);
+        return string.IsNullOrWhiteSpace(slug) ? null : slug;
+    }
+
+    // The links picked in the Global Search Content tab. A link without a title or an address is skipped.
+    private IReadOnlyList<SearchItemDto> PickedHelpLinks(IPublishedContent site, string? culture)
     {
         if (valueMapper.Raw(site, CmsConstants.SiteFields.HelpLinks, culture) is not IEnumerable<Link> links) return [];
 
@@ -112,10 +151,7 @@ public sealed class StartupService(
             var title = string.IsNullOrWhiteSpace(link.Name) ? null : link.Name;
             if (title is null || string.IsNullOrWhiteSpace(link.Url)) continue;
 
-            var node = link.Type == LinkType.Content && link.Udi is GuidUdi udi ? contentQuery.Content(udi.Guid) : null;
-            var slug = node is null ? null : valueMapper.Text(node, CmsConstants.Fields.Slug, culture);
-
-            items.Add(new SearchItemDto { Title = title, Slug = string.IsNullOrWhiteSpace(slug) ? null : slug, Cta = LinkMapper.Map(link) });
+            items.Add(new SearchItemDto { Title = title, Slug = SlugOf(link, culture), Cta = LinkMapper.Map(link) });
         }
 
         return items;

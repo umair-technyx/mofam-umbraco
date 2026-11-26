@@ -68,6 +68,8 @@ public sealed record SearchItemDto
     /// <summary>The slug of the picked node. Null for an external or media link.</summary>
     public string? Slug { get; init; }
 
+    public MediaDto? Icon { get; init; }
+
     public LinkDto? Cta { get; init; }
 }
 

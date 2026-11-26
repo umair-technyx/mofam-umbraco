@@ -118,7 +118,7 @@ public static class GeneralConstants
 
     // The forms that have their own rate limit counter (the last part of the path /api/web/form/{culture}/{form}).
     // Add the name of each new form here. Any other name shares one "other" counter, so random paths cannot create endless counters.
-    public static readonly string[] FormNames = ["contact"];
+    public static readonly string[] FormNames = ["contact", "newsletter"];
 
     #endregion
 

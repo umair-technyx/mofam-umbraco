@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Net;
+using System.Text;
 using System.Text.RegularExpressions;
 using Ganss.Xss;
 using Mofam.Domain.Constants;
@@ -94,6 +95,50 @@ public static partial class CommonHelper
 
         return [.. expanded];
     }
+
+    #endregion
+
+    #region Csv
+
+    // One CSV writer for all the exports. headers: the column names. rows: the text of each column of each row.
+    // phoneColumn: the position of a phone column (or -1 when there is none).
+    public static byte[] BuildCsv(string[] headers, IEnumerable<string?[]> rows, int phoneColumn = -1)
+    {
+        var text = new StringBuilder();
+        text.AppendLine(string.Join(',', headers.Select(CsvField)));
+
+        foreach (var row in rows)
+        {
+            text.AppendLine(string.Join(',', row.Select((cell, column) => column == phoneColumn ? CsvPhone(cell) : CsvField(cell))));
+        }
+
+        return CsvBytes(text.ToString());
+    }
+
+    // Every field is in quotes. A text that starts with = + - @ is made plain text with a ' in front,
+    // or Excel would run it as a formula (a visitor could type one in the form).
+    private static string CsvField(string? value)
+    {
+        var text = value ?? string.Empty;
+        if (text.Length > 0 && text[0] is '=' or '+' or '-' or '@' or '\t' or '\r') text = "'" + text;
+
+        return '"' + text.Replace("\"", "\"\"") + '"';
+    }
+
+    // A phone number (+971500000000) is written as ="+971500000000", so Excel keeps the + and all the digits as text.
+    // Only a text of digits, spaces, brackets, - and a + at the start gets this, so it cannot hold a formula.
+    private static string CsvPhone(string? value)
+    {
+        var text = value?.Trim() ?? string.Empty;
+
+        return CsvPhonePattern().IsMatch(text) ? "\"=\"\"" + text + "\"\"\"" : CsvField(text);
+    }
+
+    [GeneratedRegex(@"^\+?[0-9 ()\-]{3,50}$", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex CsvPhonePattern();
+
+    // UTF-8 with a mark at the start, so Excel reads Arabic text correctly.
+    private static byte[] CsvBytes(string text) => [.. Encoding.UTF8.GetPreamble(), .. Encoding.UTF8.GetBytes(text)];
 
     #endregion
 }

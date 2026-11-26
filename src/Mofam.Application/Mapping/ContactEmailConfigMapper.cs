@@ -30,6 +30,14 @@ public sealed class ContactEmailConfigMapper(
         return config;
     }
 
+    public bool IsEmailEnabled(string culture)
+    {
+        var settingsRoot = siteRootResolver.GetRoot(CmsConstants.RootAlias.Settings);
+        var formSettings = settingsRoot is null ? null : siteRootResolver.FindChild(settingsRoot, CmsConstants.ContentTypes.WebsiteSettings);
+
+        return formSettings is not null && valueMapper.Raw(formSettings, CmsConstants.Fields.ContactUsSendEmail, culture) is true;
+    }
+
     private ContactEmailConfig? Build(string culture, out string? failure)
     {
         var settingsRoot = siteRootResolver.GetRoot(CmsConstants.RootAlias.Settings);

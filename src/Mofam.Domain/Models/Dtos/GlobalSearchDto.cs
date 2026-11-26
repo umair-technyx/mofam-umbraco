@@ -39,7 +39,7 @@ public sealed record SearchResultItemDto
     public string? Description { get; init; }
 
     /// <summary>The Page Category picked for the item (for example "Guidance"). Null when none.</summary>
-    public string? PageType { get; init; }
+    public string? PageCategory { get; init; }
 
     /// <summary>The first category, for example "Getting married". Null when none.</summary>
     public string? Category { get; init; }

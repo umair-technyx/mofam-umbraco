@@ -52,11 +52,19 @@ public sealed class ServiceComposer : IComposer
         builder.Services.Configure<EmailSettings>(builder.Config.GetSection(EmailSettings.SectionName));
         builder.Services.Configure<ReCaptchaOptions>(builder.Config.GetSection(ReCaptchaOptions.SectionName));
 
-        builder.Services.AddScoped<IContactEmailConfigMapper, ContactEmailConfigMapper>();
-        builder.Services.AddScoped<IContactService, ContactService>();
+        // Shared by the contact and the newsletter forms.
         builder.Services.AddSingleton<IRecaptchaService, RecaptchaService>();
-
         // The send timeout (15 seconds) is set in EmailHelper.
         builder.Services.AddHttpClient<EmailHelper>();
+
+        // Contact form.
+        builder.Services.AddScoped<IContactEmailConfigMapper, ContactEmailConfigMapper>();
+        builder.Services.AddScoped<IContactService, ContactService>();
+        builder.Services.AddScoped<IContactSubmissionService, ContactSubmissionService>();
+
+        // Newsletter form.
+        builder.Services.AddScoped<INewsletterEmailConfigMapper, NewsletterEmailConfigMapper>();
+        builder.Services.AddScoped<INewsletterSubscriptionService, NewsletterSubscriptionService>();
+        builder.Services.AddScoped<INewsletterService, NewsletterService>();
     }
 }
