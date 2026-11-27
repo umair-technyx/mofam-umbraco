@@ -57,12 +57,17 @@ if (!rateLimitSection.Exists())
 var rateLimitOptions = new RateLimitOptions();
 rateLimitSection.Bind(rateLimitOptions);
 
-if (rateLimitOptions.PermitLimit <= 0 || rateLimitOptions.WindowSeconds <= 0
-    || rateLimitOptions.SignInPermitLimit <= 0 || rateLimitOptions.SignInWindowSeconds <= 0
-    || rateLimitOptions.FormPermitLimit <= 0 || rateLimitOptions.FormWindowSeconds <= 0 || rateLimitOptions.FormTotalPermitLimit <= 0)
+int[] rateLimitValues =
+[
+    rateLimitOptions.ApiTokenLimit, rateLimitOptions.ApiTokensPerPeriod, rateLimitOptions.ApiPeriodSeconds,
+    rateLimitOptions.SignInPermitLimit, rateLimitOptions.SignInWindowSeconds,
+    rateLimitOptions.FormTokenLimit, rateLimitOptions.FormTokensPerPeriod, rateLimitOptions.FormPeriodSeconds,
+    rateLimitOptions.FormTotalTokenLimit, rateLimitOptions.FormTotalTokensPerPeriod, rateLimitOptions.FormTotalPeriodSeconds,
+];
+if (rateLimitValues.Any(value => value <= 0))
 {
     throw new InvalidOperationException(
-        $"Invalid '{RateLimitOptions.SectionName}' configuration — PermitLimit, WindowSeconds, SignInPermitLimit, SignInWindowSeconds, FormPermitLimit, FormWindowSeconds and FormTotalPermitLimit must be greater than 0.");
+        $"Invalid '{RateLimitOptions.SectionName}' configuration — every token limit, tokens per period and period seconds must be greater than 0.");
 }
 
 var entraSettings = builder.Configuration.GetSection(EntraBackOfficeOptions.SectionName).Get<EntraBackOfficeOptions>() ?? new EntraBackOfficeOptions();
