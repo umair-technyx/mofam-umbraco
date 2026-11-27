@@ -94,9 +94,9 @@ public sealed partial class NewsletterService(
 
         if (!saved.IsNew)
         {
-            // Already subscribed: the visitor sees the same success, and no email is sent again.
+            // Already subscribed: nothing is saved or emailed again, and the visitor is told so.
             logger.Information("Newsletter subscription {Reference}: the email was already subscribed. Id={Id}, Culture={Culture}", reference, saved.Id, culture);
-            return new NewsletterReceiptDto(reference);
+            return new NewsletterReceiptDto(reference, AlreadySubscribed: true);
         }
 
         logger.Information("Newsletter subscription {Reference} was saved. Id={Id}, Culture={Culture}", reference, saved.Id, culture);
