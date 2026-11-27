@@ -63,8 +63,45 @@ public sealed class StartupService(
             Dictionary = await GetDictionaryAsync(culture),
             ContentTypes = CmsConstants.ContentTypes.PageTypes,
             GlobalSearch = GlobalSearchLinks(site, culture),
+            NewsletterForm = BuildNewsletterForm(site, culture),
         };
     }
+
+    #endregion
+
+    #region Newsletter form
+
+    // The Newsletter Form Content tab of the site root. Null when nothing is filled in.
+    private NewsletterFormDto? BuildNewsletterForm(IPublishedContent site, string? culture)
+    {
+        var form = new NewsletterFormDto
+        {
+            LeftCardHeading = Blank(valueMapper.Text(site, CmsConstants.SiteFields.LeftCardHeading, culture)),
+            LeftCardTitle = Blank(valueMapper.Text(site, CmsConstants.SiteFields.LeftCardTitle, culture)),
+            LeftCardDescription = Blank(valueMapper.Text(site, CmsConstants.SiteFields.LeftCardDescription, culture)),
+            LeftCardInputPlaceholder = Blank(valueMapper.Text(site, CmsConstants.SiteFields.LeftCardInputPlaceholder, culture)),
+            LeftCardCtaLabel = Blank(valueMapper.Text(site, CmsConstants.SiteFields.LeftCardCtaLabel, culture)),
+            RightCardHeading = Blank(valueMapper.Text(site, CmsConstants.SiteFields.RightCardHeading, culture)),
+            RightCardTitle = Blank(valueMapper.Text(site, CmsConstants.SiteFields.RightCardTitle, culture)),
+            RightCardPrimaryCTA = valueMapper.Links(site, CmsConstants.SiteFields.RightCardPrimaryCta, culture).FirstOrDefault(),
+            RightCardSecondaryCTA = valueMapper.Links(site, CmsConstants.SiteFields.RightCardSecondaryCta, culture).FirstOrDefault(),
+            LeftDecorativeElements = DecorativeElements(site, CmsConstants.SiteFields.LeftDecorativeElements, culture),
+            RightDecorativeElements = DecorativeElements(site, CmsConstants.SiteFields.RightDecorativeElements, culture),
+        };
+
+        return form == new NewsletterFormDto() ? null : form;
+    }
+
+    // The decorative elements in the same shape as in a component: { alias, properties }.
+    private IReadOnlyList<ComponentDto>? DecorativeElements(IPublishedContent site, string alias, string? culture)
+    {
+        if (valueMapper.Raw(site, alias, culture) is not BlockListModel blocks || blocks.Count == 0) return null;
+
+        var properties = valueMapper.BlockListItems(site, alias, culture);
+        return [.. blocks.Select((block, i) => new ComponentDto { Alias = block.Content.ContentType.Alias, Properties = properties[i] })];
+    }
+
+    private static string? Blank(string? text) => string.IsNullOrWhiteSpace(text) ? null : text;
 
     #endregion
 

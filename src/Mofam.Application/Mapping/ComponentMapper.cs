@@ -179,6 +179,12 @@ public sealed class ComponentMapper(
             // The editor can hide the CTA of a node in its "Card Settings". The rest of the card is still sent.
             var hideCta = valueMapper.Raw(node, CmsConstants.ThumbnailCards.HideCta, culture) is true;
 
+            // No label on the CTA: use the Title field of the node (in the same language).
+            if (cta is not null && IsDefaultLabel(link.Name, node, culture))
+            {
+                cta = cta with { Name = Blank(valueMapper.Text(node, CmsConstants.ThumbnailCards.Title, culture)) ?? cta.Name };
+            }
+
             var tags = valueMapper.Raw(node, CmsConstants.ThumbnailCards.Tags, culture);
             var mappedTags = tags is null ? null : SanitizeValue(tags, culture, resolvePage, ancestors);
 
@@ -207,6 +213,15 @@ public sealed class ComponentMapper(
     }
 
     private static string? Blank(string? text) => string.IsNullOrWhiteSpace(text) ? null : text;
+
+    // True when the label is empty, or is only the page name (Umbraco puts the page name in an empty label).
+    private static bool IsDefaultLabel(string? label, IPublishedContent node, string? culture)
+    {
+        if (string.IsNullOrWhiteSpace(label)) return true;
+
+        var pageName = culture is not null && node.Cultures.TryGetValue(culture, out var info) ? info.Name : node.Name;
+        return string.Equals(label.Trim(), pageName?.Trim(), StringComparison.OrdinalIgnoreCase);
+    }
 
     private object? SanitizeValue(
         object? value,

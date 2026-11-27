@@ -158,6 +158,19 @@ public static class CmsConstants
         // Global Search Content tab
         public const string HelpLinks = "helpLinks";
         public const string LifeStagesLinks = "lifeStagesLinks";
+
+        // Newsletter Form Content tab (same aliases as the Dual Card With CTA component)
+        public const string LeftCardHeading = "leftCardHeading";
+        public const string LeftCardTitle = "leftCardTitle";
+        public const string LeftCardDescription = "leftCardDescription";
+        public const string LeftCardInputPlaceholder = "leftCardInputPlaceholder";
+        public const string LeftCardCtaLabel = "leftCardCtaLabel";
+        public const string RightCardHeading = "rightCardHeading";
+        public const string RightCardTitle = "rightCardTitle";
+        public const string RightCardPrimaryCta = "rightCardPrimaryCTA";
+        public const string RightCardSecondaryCta = "rightCardSecondaryCTA";
+        public const string LeftDecorativeElements = "leftDecorativeElements";
+        public const string RightDecorativeElements = "rightDecorativeElements";
     }
 
     // The "Icon with CTA" element type of the Global Search life stage links block list.

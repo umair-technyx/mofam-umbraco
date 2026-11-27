@@ -13,6 +13,9 @@ public sealed record Startup
     // The "Can't find it?" links of the global search (call, live chat, find a centre).
     public IReadOnlyList<SearchItemDto> GlobalSearch { get; init; } = [];
 
+    // The newsletter and "Get in touch" cards (Newsletter Form Content tab of the site root).
+    public NewsletterFormDto? NewsletterForm { get; init; }
+
     public required ScriptsDto Scripts { get; init; }
 
     // Dictionary key and its translated value for the requested culture.
@@ -71,6 +74,26 @@ public sealed record SearchItemDto
     public MediaDto? Icon { get; init; }
 
     public LinkDto? Cta { get; init; }
+}
+
+#endregion
+
+#region Newsletter form
+
+// The same keys as the Dual Card With CTA component, so the front end can use one shape.
+public sealed record NewsletterFormDto
+{
+    public string? LeftCardHeading { get; init; }
+    public string? LeftCardTitle { get; init; }
+    public string? LeftCardDescription { get; init; }
+    public string? LeftCardInputPlaceholder { get; init; }
+    public string? LeftCardCtaLabel { get; init; }
+    public string? RightCardHeading { get; init; }
+    public string? RightCardTitle { get; init; }
+    public LinkDto? RightCardPrimaryCTA { get; init; }
+    public LinkDto? RightCardSecondaryCTA { get; init; }
+    public IReadOnlyList<ComponentDto>? LeftDecorativeElements { get; init; }
+    public IReadOnlyList<ComponentDto>? RightDecorativeElements { get; init; }
 }
 
 #endregion

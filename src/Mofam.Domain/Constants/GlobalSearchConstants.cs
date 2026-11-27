@@ -15,6 +15,9 @@ public static class GlobalSearchConstants
         CmsConstants.ContentTypes.Page,
     ];
 
+    // The "Has detail page" toggle of Card Settings. Only items with it on are found.
+    public const string HasDetailPageAlias = "hasDetailPage";
+
     // The Page Tag field of the items (for example "Guidance"). The tags are the Page Tags data source.
     public const string PageTagAlias = "pageTag";
 
