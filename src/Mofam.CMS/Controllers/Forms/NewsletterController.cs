@@ -25,6 +25,10 @@ public sealed class NewsletterController(INewsletterService newsletterService) :
 
         var receipt = await newsletterService.SubscribeAsync(request, supported, HttpContext.Connection.RemoteIpAddress?.ToString(), HttpContext.TraceIdentifier, cancellationToken);
 
-        return Ok(ApiResponse<NewsletterReceiptDto>.Ok(receipt, "You have subscribed to the newsletter successfully.") with { TraceId = receipt.Reference });
+        var message = receipt.AlreadySubscribed
+            ? "You are already subscribed to the newsletter."
+            : "You have subscribed to the newsletter successfully.";
+
+        return Ok(ApiResponse<NewsletterReceiptDto>.Ok(receipt, message) with { TraceId = receipt.Reference });
     }
 }

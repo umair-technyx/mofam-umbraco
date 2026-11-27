@@ -44,7 +44,7 @@ Main `appsettings.json` sections (in Key Vault, use `--` between levels, e.g. `R
 | Section | Purpose |
 |---|---|
 | `Security:ApiKey` | Shared key required on every `/api` request (`X-Api-Key` header) |
-| `RateLimit` | Fixed-window limits: `PermitLimit`/`WindowSeconds` (API, per visitor), `SignInPermitLimit`/`SignInWindowSeconds`, `FormPermitLimit`/`FormWindowSeconds` (per visitor, per form), `FormTotalPermitLimit` (all visitors, per form) |
+| `RateLimit` | Token bucket limits: `Api*` (per visitor), `Form*` (per visitor, per form), `FormTotal*` (all visitors, per form), each with `TokenLimit`, `TokensPerPeriod` and `PeriodSeconds`. Sign-in: `SignInPermitLimit`/`SignInWindowSeconds` (fixed window) |
 | `Cache` | Cache on/off and durations for site root, pages, 404s, startup, filters and contact settings |
 | `Cors:AllowedOrigins` | Allowed browser origins (empty = none) |
 | `BackOfficeEntraId` | Entra ID login: tenant, client, secret, callback paths, `DenyLocalLogin`, `ExtraGroups` |
@@ -74,9 +74,11 @@ Responses use one shape: `ApiResponse<T>` with `StatusCode`, `Success`, `Message
 
 ## Rate Limits
 
-- **API (`/api/web`)**: per visitor, `PermitLimit` per `WindowSeconds`. The frontend server's own calls (valid key, no `X-Client-IP`) are not limited.
-- **Forms (`/api/web/form/...`)**: each form has its own counters: `FormPermitLimit` per visitor and `FormTotalPermitLimit` for all visitors, per `FormWindowSeconds`. Only requests with a valid key count toward the total.
-- **Sign-in pages**: per visitor.
+Token bucket: a visitor has up to `TokenLimit` tokens, each request uses one, and `TokensPerPeriod` tokens come back every `PeriodSeconds`. A short burst is allowed and nobody is blocked for long.
+
+- **API (`/api/web`)**: per visitor, 300 tokens, 30 back every second. The frontend server's own calls (valid key, no `X-Client-IP`) are not limited.
+- **Forms (`/api/web/form/...`)**: each form has its own buckets: per visitor 10 tokens, 1 back every 6 seconds; all visitors together 1000 tokens, 20 back every second. Only requests with a valid key count toward the total.
+- **Sign-in pages**: per visitor, `SignInPermitLimit` per `SignInWindowSeconds` (fixed window).
 - A refused request gets `429` with a `Retry-After` header. IPv6 visitors are counted per `/64` block.
 
 ## Caching
