@@ -4,7 +4,8 @@ using Mofam.Domain.Constants;
 namespace Mofam.Domain.Models.Dtos;
 
 // AlreadySubscribed is true when the email was on the list before: nothing is saved or sent again.
-public sealed record NewsletterReceiptDto(string Reference, bool AlreadySubscribed = false);
+// The request id is sent as the traceId of the response, not here.
+public sealed record NewsletterReceiptDto(bool AlreadySubscribed = false);
 public sealed class NewsletterSubscriberDto
 {
     public int Id { get; set; }

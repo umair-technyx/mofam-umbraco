@@ -29,6 +29,7 @@ public sealed class NewsletterController(INewsletterService newsletterService) :
             ? "You are already subscribed to the newsletter."
             : "You have subscribed to the newsletter successfully.";
 
-        return Ok(ApiResponse<NewsletterReceiptDto>.Ok(receipt, message) with { TraceId = receipt.Reference });
+        // The request id is the reference of the subscription in the logs; it is sent back as the traceId.
+        return Ok(ApiResponse<NewsletterReceiptDto>.Ok(receipt, message) with { TraceId = HttpContext.TraceIdentifier });
     }
 }
