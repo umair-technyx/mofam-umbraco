@@ -8,6 +8,7 @@ namespace Mofam.Infrastructure.Routing;
 
 // Builds the URL of every published node, so a link picked anywhere in the CMS (header, footer, a CTA, a block)
 // has the shape the front end uses, whatever the hostname settings are:
+//  - the home page (slug "home") is /{culture}, e.g. /en;
 //  - a page follows the tree, like the sitemap: /{culture}/{parent slugs}/{slug}, e.g. /en/raising-a-family/parenting-programmes;
 //  - any other node (service, resource, story, news, media...) sits under its content type: /{culture}/{contentType}/{slug}.
 // The slug is the same in every culture, so only the culture part changes. A node without a slug is left to
@@ -23,6 +24,9 @@ public sealed class SlugUrlProvider(IVariationContextAccessor variationContextAc
 
         var cultureCode = CultureCode(culture);
 
+        // The home page is the culture alone: /en or /ar.
+        if (IsPage(content) && slug == CmsConstants.Fields.HomeSlug) return UrlInfo.AsUrl($"/{cultureCode}", Alias, culture);
+
         string path;
         if (IsPage(content))
         {
@@ -35,7 +39,8 @@ public sealed class SlugUrlProvider(IVariationContextAccessor variationContextAc
                 var parentSlug = SlugOf(parent);
                 if (string.IsNullOrEmpty(parentSlug)) break;
 
-                parts.Insert(0, parentSlug);
+                // A page under the home page does not get "home" in its URL.
+                if (parentSlug != CmsConstants.Fields.HomeSlug) parts.Insert(0, parentSlug);
                 parent = parent.Parent;
             }
 #pragma warning restore CS0618
