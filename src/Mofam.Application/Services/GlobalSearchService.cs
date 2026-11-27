@@ -119,7 +119,9 @@ public sealed class GlobalSearchService(
 
         var query = index.Searcher.CreateQuery(IndexTypes.Content)
             .GroupedOr([SearchConstants.NodeTypeAliasField], types)
-            .And().Field($"{SearchConstants.PublishedField}_{culture}", "y");
+            .And().Field($"{SearchConstants.PublishedField}_{culture}", "y")
+            // Only items with "Has detail page" on.
+            .And().GroupedOr(CommonHelper.ExpandForCulture([GlobalSearchConstants.HasDetailPageAlias], culture), "1");
 
         // Every word must match the start of a word in the title or the description.
         var fields = CommonHelper.ExpandForCulture(GlobalSearchConstants.SearchableFields, culture);
