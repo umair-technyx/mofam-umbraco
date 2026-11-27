@@ -47,6 +47,9 @@ public static class CmsConstants
     {
         public const string Components = "components";
         public const string Slug = "slug";
+
+        // The slug of the home page. Its URL is the culture alone: /en or /ar.
+        public const string HomeSlug = "home";
         public const string Title = "title";
         public const string Description = "description";
         public const string Categories = "categories";

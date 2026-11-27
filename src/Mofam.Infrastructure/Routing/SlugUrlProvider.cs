@@ -17,9 +17,6 @@ public sealed class SlugUrlProvider(IVariationContextAccessor variationContextAc
 {
     public string Alias => "mofamSlug";
 
-    // The slug of the home page.
-    private const string HomeSlug = "home";
-
     public UrlInfo? GetUrl(IPublishedContent content, UrlMode mode, string? culture, Uri current)
     {
         var slug = SlugOf(content);
@@ -28,7 +25,7 @@ public sealed class SlugUrlProvider(IVariationContextAccessor variationContextAc
         var cultureCode = CultureCode(culture);
 
         // The home page is the culture alone: /en or /ar.
-        if (IsPage(content) && slug == HomeSlug) return UrlInfo.AsUrl($"/{cultureCode}", Alias, culture);
+        if (IsPage(content) && slug == CmsConstants.Fields.HomeSlug) return UrlInfo.AsUrl($"/{cultureCode}", Alias, culture);
 
         string path;
         if (IsPage(content))
@@ -43,7 +40,7 @@ public sealed class SlugUrlProvider(IVariationContextAccessor variationContextAc
                 if (string.IsNullOrEmpty(parentSlug)) break;
 
                 // A page under the home page does not get "home" in its URL.
-                if (parentSlug != HomeSlug) parts.Insert(0, parentSlug);
+                if (parentSlug != CmsConstants.Fields.HomeSlug) parts.Insert(0, parentSlug);
                 parent = parent.Parent;
             }
 #pragma warning restore CS0618
