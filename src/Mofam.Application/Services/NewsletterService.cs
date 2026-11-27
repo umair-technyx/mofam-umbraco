@@ -41,7 +41,7 @@ public sealed partial class NewsletterService(
         if (!string.IsNullOrWhiteSpace(request.Website))
         {
             logger.Information("Newsletter subscription {Reference} was dropped (hidden field filled). Culture={Culture}", reference, culture);
-            return new NewsletterReceiptDto(reference);
+            return new NewsletterReceiptDto();
         }
 
         // Lower case, so the same email in other letters is the same subscriber.
@@ -96,7 +96,7 @@ public sealed partial class NewsletterService(
         {
             // Already subscribed: nothing is saved or emailed again, and the visitor is told so.
             logger.Information("Newsletter subscription {Reference}: the email was already subscribed. Id={Id}, Culture={Culture}", reference, saved.Id, culture);
-            return new NewsletterReceiptDto(reference, AlreadySubscribed: true);
+            return new NewsletterReceiptDto(AlreadySubscribed: true);
         }
 
         logger.Information("Newsletter subscription {Reference} was saved. Id={Id}, Culture={Culture}", reference, saved.Id, culture);
@@ -104,12 +104,12 @@ public sealed partial class NewsletterService(
         if (!configMapper.IsEmailEnabled(culture))
         {
             logger.Information("Newsletter subscription {Reference} was not emailed: the newsletter email is off in the website settings. Id={Id}", reference, saved.Id);
-            return new NewsletterReceiptDto(reference);
+            return new NewsletterReceiptDto();
         }
 
         await SendAsync(email!, culture, reference, saved.Id);
 
-        return new NewsletterReceiptDto(reference);
+        return new NewsletterReceiptDto();
     }
 
     // The subscriber is already saved here, so a problem with an email is logged and the visitor is not told it failed.

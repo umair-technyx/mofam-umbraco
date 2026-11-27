@@ -4,5 +4,5 @@ using Mofam.Domain.Models.Requests;
 namespace Mofam.Application.IServices;
 public interface IContactService
 {
-    Task<ContactReceiptDto> SubmitAsync(ContactRequest request, string culture, string? clientIp, string reference, CancellationToken cancellationToken);
+    Task SubmitAsync(ContactRequest request, string culture, string? clientIp, string reference, CancellationToken cancellationToken);
 }

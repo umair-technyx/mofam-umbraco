@@ -20,11 +20,11 @@ public sealed partial class ContactService(
     Serilog.ILogger logger) : IContactService
 {
    
-    public async Task<ContactReceiptDto> SubmitAsync(ContactRequest request, string culture, string? clientIp, string reference, CancellationToken cancellationToken)
+    public async Task SubmitAsync(ContactRequest request, string culture, string? clientIp, string reference, CancellationToken cancellationToken)
     {
         try
         {
-            return await HandleAsync(request, culture, clientIp, reference, cancellationToken);
+            await HandleAsync(request, culture, clientIp, reference, cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException and not HttpStatusException)
         {
@@ -34,7 +34,7 @@ public sealed partial class ContactService(
     }
 
     #region Private Methods
-    private async Task<ContactReceiptDto> HandleAsync(ContactRequest request, string culture, string? clientIp, string reference, CancellationToken cancellationToken)
+    private async Task HandleAsync(ContactRequest request, string culture, string? clientIp, string reference, CancellationToken cancellationToken)
     {
         #region Check the request
 
@@ -42,7 +42,7 @@ public sealed partial class ContactService(
         if (!string.IsNullOrWhiteSpace(request.Website))
         {
             logger.Information("Contact submission {Reference} was dropped (hidden field filled). Culture={Culture}", reference, culture);
-            return new ContactReceiptDto(reference);
+            return;
         }
 
         var data = request with
@@ -110,14 +110,14 @@ public sealed partial class ContactService(
         if (!configMapper.IsEmailEnabled(culture))
         {
             logger.Information("Contact submission {Reference} was not emailed: the contact email is off in the website settings. Id={Id}", reference, id);
-            return new ContactReceiptDto(reference);
+            return;
         }
 
-        return await SendAsync(data, culture, reference, id);
+        await SendAsync(data, culture, reference, id);
     }
 
     // The entry is already saved here, so a problem with the email is logged and the visitor is not told it failed.
-    private async Task<ContactReceiptDto> SendAsync(ContactRequest data, string culture, string reference, int id)
+    private async Task SendAsync(ContactRequest data, string culture, string reference, int id)
     {
         #region Content and sender
 
@@ -125,7 +125,7 @@ public sealed partial class ContactService(
         if (config is null)
         {
             logger.Error("Contact submission {Reference} was saved (Id={Id}) but cannot be emailed. Culture={Culture}. {Reason}", reference, id, culture, failure);
-            return new ContactReceiptDto(reference);
+            return;
         }
 
         var subject = config.AdminSubject ?? string.Empty;
@@ -153,7 +153,7 @@ public sealed partial class ContactService(
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             logger.Error(ex, "Contact submission {Reference} was saved (Id={Id}) but the email failed. Culture={Culture}", reference, id, culture);
-            return new ContactReceiptDto(reference);
+            return;
         }
 
         logger.Information("Contact submission {Reference} was sent. Id={Id}, Culture={Culture}", reference, id, culture);
@@ -166,8 +166,6 @@ public sealed partial class ContactService(
         {
             logger.Warning(ex, "Contact submission {Reference} was emailed but EmailSent could not be set. Id={Id}", reference, id);
         }
-
-        return new ContactReceiptDto(reference);
     }
 
     private static string Clean(string? text) => CommonHelper.StripHtml(text).Trim();
